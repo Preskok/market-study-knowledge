@@ -214,3 +214,91 @@ const updatedPreventedSites: DeactivationPreventedSites = { ...deactivatedSites 
 ```
 
 **Source:** session 2026-05-20.
+
+### Extract repeated inline object types to named interfaces
+
+When `Array<{ site: string; ratio: number }>` appears on two or more signatures, extract to the domain interface file (e.g. `DeactivationPreventedSite.interface.ts`).
+
+```typescript
+// BAD — repeated inline shape
+private evaluateSiteLocks(...): { ...; newlyLocked: Array<{ site: string; ratio: number }> } | null {}
+private notifyLockedSites(newlyLocked: Array<{ site: string; ratio: number }>, ...): Promise<void> {}
+
+// GOOD
+export interface SiteLockEntry { site: string; ratio: number; }
+private evaluateSiteLocks(...): { ...; newlyLocked: Array<SiteLockEntry> } | null {}
+private notifyLockedSites(newlyLocked: Array<SiteLockEntry>, ...): Promise<void> {}
+```
+
+**Source:** session 2026-05-20.
+
+### Destructure static helpers to avoid repetition
+
+When calling the same static method multiple times in one block, destructure it once.
+
+```typescript
+// BAD
+lines.push(`locked at: ${DateHelper.toFormattedString({ date: ts1, format })}`);
+lines.push(`locked since: ${DateHelper.toFormattedString({ date: ts2, format })}`);
+
+// GOOD
+const { toFormattedString } = DateHelper;
+lines.push(`locked at: ${toFormattedString({ date: ts1, format })}`);
+lines.push(`locked since: ${toFormattedString({ date: ts2, format })}`);
+```
+
+**Source:** session 2026-05-20.
+
+### Guard early-return belongs inside the method, not at the call site
+
+Move `if (empty) return` guards to the top of the called method. The caller should not need to know the method is a no-op on empty input.
+
+```typescript
+// BAD — caller guards
+if (Object.keys(allLockedSites).length > 0) {
+    await this.notifyLockedSites(newlyLocked, allLockedSites);
+}
+
+// GOOD — guard inside method
+private async notifyLockedSites(...): Promise<void> {
+    if (Object.keys(allLockedSites).length === 0) return;
+    ...
+}
+```
+
+**Source:** session 2026-05-20.
+
+### Method naming — `evaluate/detect/compute` for pure calculations, not `build/update`
+
+`build` and `update` imply a side effect (writing state). Methods that only compute and return data should use `evaluate`, `detect`, `compute`, or `resolve`.
+
+```typescript
+// BAD — implies Redis write happens inside
+private buildUpdatedPreventedSites(...) {}
+
+// GOOD — signals pure evaluation, caller does the write
+private evaluateSiteLocks(...) {}
+```
+
+**Source:** session 2026-05-20.
+
+### Unify conditional data before a single call — avoid multiple conditional call sites
+
+When the same method would be called from two branches with different arguments, unify the arguments first and call once.
+
+```typescript
+// BAD — two call sites
+if (!lockResult) {
+    if (Object.keys(deactivatedSites).length > 0) await this.notifyLockedSites([], deactivatedSites);
+    return;
+}
+await this.notifyLockedSites(lockResult.newlyLocked, lockResult.updatedPreventedSites);
+
+// GOOD — one call site
+const newlyLocked = lockResult?.newlyLocked ?? [];
+const allLockedSites = lockResult?.updatedPreventedSites ?? deactivatedSites;
+if (lockResult) { await this.redisService.write(...); }
+await this.notifyLockedSites(newlyLocked, allLockedSites);
+```
+
+**Source:** session 2026-05-20.

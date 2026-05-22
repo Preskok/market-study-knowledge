@@ -115,6 +115,8 @@ Paste directly (no code block). `*text*` = bold in Slack.
 
 **Manual lock** — can lock a specific site to prevent deactivation tonight. Used during hotfixes when crawl is broken but we don't want mass-deactivation.
 
+**Per-site auto-lock (Redis)** — `DEACTIVATION_PREVENTED_SITES` key holds a JSON map of `site → { timestamp, reason }`. Written with `TimeEnum.ONE_YEAR_IN_SECONDS` TTL (31536000 s) so it never expires naturally. Populated by `checkAndPreventDeactivationBySite` cron when missing-vehicle ratio exceeds `DeactivationPreventionThresholds`. Already-locked sites are excluded from the MySQL ratio query (8-day window). Unlock is manual via `unlockSiteDeactivation` endpoint. Email notification: one consolidated email per cron run — newly locked sites at top (⚠️ header), already-locked sites below.
+
 **Mid-day deploy protocol** — lock deactivation → deploy → rerun crawler (S3 cached responses, no credits) → verify → redeliver DL → unlock.
 
 **Source:** `references/foundational.md § Deactivation pipeline`, `§ Mid-day deploy protocol`.

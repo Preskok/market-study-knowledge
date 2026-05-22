@@ -96,4 +96,4 @@ Interpret the result:
 | Pattern matching | `~/Projects/market-study-knowledge/failure-patterns.md` |
 | Fix implementation | `~/Projects/market-study-knowledge/fix-playbook.md` |
 | Code conventions | `CLAUDE.md` § "Code conventions" |
-| Local testing details | `docs/local-testing.md` |
+| Local testing details | `~/Projects/market-study-knowledge/local-testing.md` |

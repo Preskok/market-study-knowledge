@@ -61,7 +61,7 @@ Follow playbook instructions precisely. General rules from CLAUDE.md:
 - Targeted changes only — no unrelated refactoring, no cleanup of surrounding code
 - 4-space indent, explicit return types on every function, no `any`, path aliases only (no `../../..`)
 - Every early `return` in `parseVehicleInput` / listing forEach must log via `this.logger.warn(...)` with `LoggingContexts.PARSER_DEBUGGING` (minimum: `message`, `site: this.site`, `url` or `itemId`)
-- Lint only touched files: `npx prettier --write <file> && npx eslint <file> --fix`
+- Lint only **newly created** files (never existing ones, even if modified): `npx prettier --write <file> && npx eslint <file> --fix`
 
 **If the fix involves iterative testing** (e.g. ScrapeDo migration, selector change): add a narrow brand filter to `getBrandsAndModels()` while testing — see fix-playbook § "Narrow with a brand filter". Remove it before creating the PR.
 

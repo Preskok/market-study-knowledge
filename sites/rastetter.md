@@ -1,9 +1,11 @@
 # rastetter (DE, buyer-stock)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+✅ **2026-05-25 OK** — Recurring midnight listingUrl prep failure; 6AM auto-rerun succeeded. Part of same pattern as ahm/schmidt-automobile. Part of a group of sites that regularly fail to prepare listingUrls at midnight.
 
 ## History & quirks (newest first where known)
+- **2026-05-25** — Problem preparing listingUrl messages (alongside ahm and schmidt-automobile). 6AM auto-rerun succeeded ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779682055148269)
+- **2026-05-14** — Problem preparing listingUrls at midnight; automatic rerun at 6AM succeeded ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1778485086288569)
 - **2026-04-21** — Automatic rerun triggered and completed successfully ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1777349596109229)
 - Site-side duplicates (~700).
 - Wrong API URL → 400-600 dupes/day.

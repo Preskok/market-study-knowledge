@@ -1,9 +1,10 @@
 # promo-neuve (FR)
 
 ## Current status
-🔴 **2026-05-15 OPEN** — `}` parsing failure ongoing. 8+ new MS_DL messages today (31 total in queue as of 2026-05-15). No fix deployed.
+🔴 **2026-05-25 OPEN** — `}` parsing failure ongoing. Recurring 6–8 new MS_DL messages every crawl run (every 3 days). No fix deployed.
 
 ## History & quirks (newest first where known)
+- **2026-05-24** — 6 new MS_DL messages; **2026-05-21** — 7 messages; **2026-05-18** — 8 messages. All same VW Transporter vehicle (`E118935952`, offer codes `C059654` / `C060324`). S3 cache from 2026-05-21 confirmed `"rigide (y compris système de stabilisation de la remorque}"` equipment label is present — `}` inside string value is the confirmed trigger. 3-day recurrence matches `runOnNthDays: 3` config: crawler re-discovers the listing each run, queues detail visit, brace-counter fails, NACK → DL. Same vehicle every time = same bug every time.
 - **2026-05-15** — 8 new MS_DL messages (same `}` bug). S3 raw responses confirmed as genuine promoneuve.fr pages — no ScrapeDo cross-user contamination. Root cause pinned to `getPromoNeuveVehicleDataScript`: brace-counter hits a `}` inside a description string value (e.g. `"stabilisation de la remorque}"`) and prematurely terminates JSON extraction, producing truncated input to `JSON.parse`. Fix needed: brace-counter must track when it's inside a string value to skip such characters.
 - **2026-05-04** — 22 MS_DL messages due to `}` in equipment descriptions; queue purged. Issue ongoing with no code fix deployed. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1777879864126089)
 - **2026-04-24** — 5 MS_DL queue messages due to `}` character in equipment descriptions (pre-existing known quirk, see History). Queue purged manually ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1777349596109229)

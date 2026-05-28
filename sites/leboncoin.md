@@ -1,9 +1,10 @@
 # leboncoin (FR, HUGE)
 
 ## Current status
-✅ **2026-05-04 OK** — Crawling normally. 5 DL messages from Apr 27/30 cleared; those listings now working.
+🟡 **2026-05-15 WATCH** — Volume recovered to 757k after dip to ~680k (2026-05-12). 2 ongoing MS_DL messages with ScrapeDo wrong-response (ARO_Forester + INNOCENTI_Turbo → Amazon.com). Monitoring.
 
 ## History & quirks (newest first where known)
+- **2026-05-11→2026-05-15** — Volume drop: 760k (pre-May 3) → 680k (May 12) → 706k (May 14) → recovered to 757k (May 15). Root cause: Renault Clio listing URL failed (broken script parsing) → ~35k missing vehicles. 2 MS_DL messages with ScrapeDo cross-user contamination (ARO_Forester + INNOCENTI_Turbo URLs leading to Amazon.com pages). [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1778485086288569)
 - **2026-05-04** — 5 MS_DL messages from Apr 27 and Apr 30; Matea confirmed those listings are now working. Queue purged ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1777879864126089)
 - **2026-04-24** — ~60k duplicates in one day's crawl. Unique vehicle count OK at 740k; total crawled 797k. Duplicates are a known artefact of the crawl strategy — unique count is the real metric to watch. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1777349596109229)
 - Only `ultra_premium` (30-credit) ScraperAPI works.

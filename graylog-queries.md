@@ -70,6 +70,14 @@ facility:marketstudy* AND site:[SITE] AND errorCode:410   # fake 410 pattern (ha
 facility:marketstudy* AND site:[SITE] AND full_message:"Exception doing scrapeDo request"
 facility:marketstudy* AND site:[SITE] AND full_message:"Exception doing browser request"
 facility:marketstudy* AND "exception doing curl request"
+
+# Chromium / Puppeteer timeouts (wraps net::ERR_TUNNEL_CONNECTION_FAILED, ERR_CONNECTION_RESET, etc.)
+# Do NOT search "net::ERR" or "TUNNEL" — those strings never reach Graylog.
+facility:marketstudy* AND site:[SITE] AND "Browser timeout reached"
+
+# Correlate Browser-timeout to upstream proxy: join via request_id to the "Starting browser request"
+# log (same request_id), which carries specificProxy.
+facility:marketstudy* AND site:[SITE] AND "Starting browser request"
 ```
 
 ---

@@ -1,9 +1,10 @@
 # bob-automobile (DE)
 
 ## Current status
-🔴 **2026-04-30 OPEN** — CRITICAL newly-active ratio alert triggered (58.4%). Possible second URL change after April's meinfahrzeug.shop migration. Investigation pending.
+✅ **2026-05-18 RESOLVED** — Progressive validation logs for mileage and horsePower confirmed legit (ads updated on site). April 30 ratio alert explained by the URL migration side-effects.
 
 ## History & quirks (newest first where known)
+- **2026-05-18** — Progressive validation logs for mileage and a few for horsePower all confirmed legit — sellers updated mileage values on their ads ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779107075945509)
 - **2026-04-30** — CRITICAL ratio alert: 2687 vehicles crawled, 1569 newly active (58.4%). Potential URL change after the meinfahrzeug.shop migration. Filip noted to check when capacity allows; no resolution confirmed in Slack. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1777349596109229)
 - **2026-04-22→2026-04-24** — `bob-automobile.de` baseUrl changed (redirects to `meinfahrzeug.shop`). Root cause: `adminId` parsed incorrectly → URL contained `/null/`. S3 delete + rerun not sufficient (baseUrl itself changed). Filip prepared URL fix (PR #5 on GitHub). Fix deployed ~2026-04-23. All vehicles crawled successfully 2026-04-24 ✅. Note: site may be rebranding to `bob-automotive` — ticket opened for slug/alias renaming. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1776852517123019)
 - April 2026: `bob-automobile.de` → `meinfahrzeug.shop`.

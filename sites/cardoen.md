@@ -1,9 +1,10 @@
 # cardoen (BE)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+🟡 **2026-05-18 WATCH** — Slight drop 1.2k→1.1k; site shows 1194. Monitoring.
 
 ## History & quirks (newest first where known)
+- **2026-05-18** — Slight drop 1.2k→1.1k. Site confirmed 1194 vehicles — drop is legitimate. Monitoring. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779107075945509)
 - bodyType filter removed. Later family-cars category narrowed.
 - "Cardoen Advantage" = catalogPrice - cardoenPrice. Gregor decision 2025-02: this is NOT a discount and must NOT be saved as `discount`. Save only `catalogPrice` (from details) and `price` (from listing = cardoenPrice). Same pattern as star-terre negative discount.
 - Listing has only `discountedPrice` (cardoen price), details have `catalogPrice` — OK to save only price from listing, catalogPrice from details.

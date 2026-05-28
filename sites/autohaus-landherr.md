@@ -1,10 +1,10 @@
 # autohaus-landherr
 
 ## Current status
-_No information on file — likely healthy, but verify in Slack if you suspect a problem._
+✅ **2026-05-27** — Healthy. Apparent inflated count is ES rollover duplicates, not a bug.
 
 ## History & quirks (newest first where known)
-- No incidents on file in this knowledge base — check Slack for any history.
+- **2026-05-27** — Alert showed 629 total vs 444 on site. 7-day cardinality query on URL field returned 442 unique — matches the real site count. Extra 187 are ES rollover duplicates: same `storeId` re-indexed into a new backing index after a rollover event, search alias returns both copies. Use `cardinality` on `URL` field (not raw doc count) to get the true vehicle count. Code confirmed healthy locally.
 
 ## Related patterns
 _Cross-referenced in failure-patterns.md. Grep that file for this site's name to find them._

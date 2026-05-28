@@ -1,9 +1,10 @@
 # mobile (DE)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+🟡 **2026-05-13 DATA QUALITY OPEN** — ~65k vehicles incorrectly assigned country=DE (non-EU/unrecognized countries fall back to DE). Fix: add Denmark + Czech Republic to country list, skip vehicles with unrecognized countries. Added to MAR-2067.
 
 ## History & quirks (newest first where known)
+- **2026-05-13** — Data quality issue: only 8 non-DE countries hardcoded (behaviour from 3 years ago). ~65k vehicles with non-EU/unrecognized countries saved as DE (<5% of total mobile.de stock). Also found: `trimLine` attribute in API response can be used as `rawVersion` directly (improvement also added to MAR-2067). Decision: add DK + CZ to country list, skip all other unrecognized countries. [Slack](https://preskok.slack.com/archives/C04K2LP3AG0/p1778679073096599)
 - Akamai on base HTML (2026-03). Mobile API NOT blocked.
 - One-day ~200k saved-volume drop (recovered after Marko consult — root cause not pinned, likely transient anti-bot blip).
 - Hardcoded brand list fallback when HTML unreachable.

@@ -1,9 +1,10 @@
 # auto-ici (FR)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+⚠️ **2026-05-22 OPEN** — MAR-2016 French proxies fix in progress. Branch: `bugfix/MAR-2016-fix-auto-ici-crawler-french-proxies`. FR proxy handling already committed by Matea pre-vacation; Filip continuing from there.
 
 ## History & quirks (newest first where known)
+- **2026-05-22** — MAR-2016: Filip working on French proxies fix. Matea had notes + FR proxy handling committed in branch before vacation. Filip asked about which port/proxy set; Matea pointed to branch commit. [Slack](https://preskok.slack.com/archives/C04K2LP3AG0/p1779435417592059)
 - Needs French IP.
 - `vehicletype_id=4` SUV consistently times out.
 

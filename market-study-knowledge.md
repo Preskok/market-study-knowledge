@@ -38,6 +38,18 @@ Curated answers for `ams [topic]` queries. Each entry: dense bullets + Source li
 
 **Field naming convention** — Old search index (`marketstudy_search_rollover`) uses **mixed case**: top-level fields are PascalCase (`CreatedAt`, `Site`, `URL`, `Brand`, `Model`, `Price`), but nested object subfields keep their original casing. Date field for "when crawled" = `CreatedAt` (no `activeFrom` in old search index). Confirmed from live prod sample 2026-05-15.
 
+**`Description` lives in the old search index** (PascalCase `Description` alongside `Site`/`URL`) — NOT in a separate vehicle-data sibling. Coverage is partial and dealer-dependent (typical site: 60–85% of active docs populated; eurostocks 79.5% confirmed 2026-05-26). The other 15–40% are empty because the source dealer didn't fill it on the ad. Always measure with an aggregation across the active set — a 5-doc sample by `CreatedAt desc` often lands on the unpopulated minority and reads as a false bug.
+
+**Persistent vs reset timestamps** — `activeFrom` (Data index, lowercase) is the **ONLY** field that genuinely persists across the entire vehicle lifetime. Both old-index `CreatedAt` and data-index `createdAt` reset on doc rewrite / index rollover. Observed live: same eurostocks doc has `activeFrom: 2022-03-14` but `createdAt: 2026-05-25`. Use `activeFrom` for any "first ever seen" / cross-deploy / cross-era comparison.
+
+**Rollover duplicate inflation** — when a rollover happens mid-week, the same `storeId` can exist in two backing indices (pre-rollover and post-rollover). A `_search` or `_count` query across the alias returns BOTH copies — inflating totals. Symptom: raw doc count is e.g. 1.4×–2× higher than vehicle count on source site. Diagnosis: run a cardinality aggregation on `URL` field — the cardinality result is the true vehicle count; the difference is rollover duplicates. This is expected behaviour, not a crawler bug. Observed: autohaus-landherr 629 total / 442 unique URL in 7-day window vs 444 on site (2026-05-27). The 1.42× ratio matches a mix of 1× and 2× crawl days (midnight fail + 6 AM retry).
+
+**Source:** session 2026-05-27.
+
+**Kibana CreatedAt histogram is misleading for "vehicle age"** — a `site:"<SITE>"` discover view bucketed by `CreatedAt` shows when docs were last written, NOT how old the vehicles are. During an in-progress crawl you'll see two bars (e.g. ~20k pinned at the previous run's date, ~10k at today) — both groups can be any mix of brand-new and continuously-tracked-for-years vehicles. After the crawl finishes everything collapses to today. To measure actual age, switch to the data index and bucket by `activeFrom` instead. Note: `activeFrom` ALSO resets on reactivation (vehicle deactivated then re-detected → fresh `activeFrom`), so even this isn't perfect — but it's the closest thing to "first seen".
+
+**Validation gate is split between indices** — the Graylog log `"Skip saving data vehicle to ES due to failed validation"` (context `VALIDATION`) **only blocks writes to the data index**. The old search index write path runs separately and bypasses the same gate, so docs that failed validation can still appear in `marketstudy_search_rollover`. This is the current architectural behaviour. Confirmed 2026-05-26: 8 eurostocks docs with negative `Price`/`NettoPrice` (Ferrari/Bentley/Mercedes/etc.) present in old index, absent in data index, all logged 9× as VALIDATION skips. When you see "validation skipped but data is still in ES", check which index you're reading — it's almost certainly the old search index.
+
 **country field** — in old search index: `Country.country` (capital C outer, lowercase c inner — mixed!). In Data index: `country.country` (all lowercase, confirmed working). No `.keyword` suffix needed on either. Country values from `CountryInfo.ts` — notable: Czech Republic = `Czech`, North Macedonia = `Macedonia`, Bosnia = `Bosnia and Herzegovina`. Moldova is NOT in `CountryInfo.ts` (no crawler exists for it).
 
 **Active vehicles Kibana query (Data index):** — Data index uses all-lowercase fields (different from old search index).
@@ -217,9 +229,11 @@ Paste directly (no code block). `*text*` = bold in Slack.
 
 **Status check** — `$PROXY_URL (HTTP)` (80XX), `$PROXY_URL (HTTP, 90XX)` (90XX). Admin: `$PROXY_URL/admin/`.
 
+**HAProxy stats dashboard** — same host as `$PROXY_URL`, port **:8080**. Loads the HAProxy stats HTML. Append `/;csv` for machine-parseable CSV: `curl -s http://<proxy-host>:8080/\;csv`. Backend groups are named by provider: `vpn_*` = PRESKOK pool (proxy1–proxy15, proxyfr1, proxyfr2 — all served via 80XX frontends), `hma_*` = HideMyAss pool. Each physical proxy box appears in multiple backend groups (round-robin `vpn_backend_all_8000`, paired `vpn_backend_80XX`, single-listener `vpn_backend_single_80XX`). A server entry named with literal suffix `offline` (e.g. `proxy1offline` on `hma_backend_single_offline_8020`) is **intentionally decommissioned** — expected to show DOWN/L4CON, not a real outage.
+
 **Swap procedure** — see fix-playbook.md. If 9007 down → AWS parameter store → delete Redis `datadomeService` → deploy.
 
-**Source:** [Proxy Confluence](https://preskok.atlassian.net/wiki/spaces/M/pages/2609971332/Proxy), `references/foundational.md § Proxy architecture`.
+**Source:** [Proxy Confluence](https://preskok.atlassian.net/wiki/spaces/M/pages/2609971332/Proxy), `references/foundational.md § Proxy architecture`, session 2026-05-27.
 
 ---
 
@@ -978,3 +992,121 @@ service = module.get<CrawlerService>(CrawlerService);
 **Deactivation-driven spike (createdAt attribution)** — a partial/failed crawl (site down, proxy issues, incomplete run) followed by the nightly deactivation pipeline produces a Data index spike dated to the *last successful crawl*, not to the deactivation night. Key signals: (1) spike date is 1-2 days before the anomaly date; (2) affected vehicles have round-second `createdAt` (`.000Z` suffix — MySQL DATETIME precision from `lastVisit`), not millisecond (live crawl). Do NOT attribute a one-time spike like this to a broken pagination selector — persistent code bugs produce persistent daily anomalies, not isolated one-time spikes. If the following days look normal without any code fix, the cause is a transient site issue (503, Cloudflare, incomplete run), not broken code.
 
 **Source:** session 2026-05-18 (auto-connect April 1 spike investigation + vozi + mobile-bg analysis).
+
+---
+
+## progressive-validation
+
+The `VALIDATION_PROGRESSIVE` Graylog context with message `"Vehicle has changed too much"` fires when fields differ vs the previously stored value. Logic in [`src/vehicle/store-vehicle.service.ts:639-712`](src/vehicle/store-vehicle.service.ts), field list in [`src/shared/const/ChangedValuesFieldsAndThresholds.ts`](src/shared/const/ChangedValuesFieldsAndThresholds.ts).
+
+**Numeric, threshold-based** (progressive %):
+- `price` — 50% under €2,000; 20% €2k–€10k; 10% above €10k
+- `mileage` — 50% under 1,000km; 20% 1k–10k; 10% above 10k
+
+**String, always logged on change:** `brand`, `model`, `version`, `engine`, `site`.
+
+**Other, always logged on change:** `engineCapacity`, `bodyType`, `driveTrain`, `fuelType`, `horsePower`, `transmission`, `numberDoors`, `numberSeats`.
+
+**`url`/`workingUrl`/`legacyUrl` are NOT in any list.** A URL change can never trigger this log — and `legacyUrl` change wouldn't anyway (it'd produce a new storeId → fresh doc, no delta).
+
+**Reading the log** — the structured `changes` field is the diagnostic; `full_message` is just the constant `"Vehicle has changed too much"`. Pull `changes` to see which field(s) drove it. Note: Graylog stores `changes` as a flat (non-tokenised) field, so substring search like `changes:DRIVETRAIN` returns 0 — pull the messages and grep client-side.
+
+**One-off migration spike pattern** — when a crawler is rewritten/redeployed and starts populating a previously-null field (e.g. `driveTrain: null → FWD`), every existing active doc fires once on its next visit. Expect a 1–2 day spike at ~size of the active set, then decay to baseline. Eurostocks 2026-05-26 example: 9,815 logs in 24h, ~85% pure `DRIVETRAIN: (OLD: null, NEW: FWD)`.
+
+**Source:** session 2026-05-26.
+
+---
+
+## graylog-prod-access
+
+**URLs (commented in `.env`, uncomment or read with grep):**
+- Local (active): `http://graylog.devenv:8090` — NOT reachable for prod/stage log validation
+- Stage: `https://graylog3beta.b2b-carmarket.com`
+- Prod: `https://graylog3.b2b-carmarket.com`
+
+Tokens for stage and prod live in the matching commented `GRAYLOG_AUTH_TOKEN` lines below each URL in `.env`.
+
+**Auth quirk** — Graylog tokens contain characters that confuse `curl -u "$TOKEN:token"` (curl reads them as a password prompt). Use an explicit Basic Auth header instead:
+```bash
+AUTH=$(printf "%s:token" "$TOKEN" | base64)
+curl -H "Authorization: Basic $AUTH" -H "X-Requested-By: curl" -H 'Content-Type: application/json' \
+  -X POST "$GURL/api/views/search/sync?timeout=20000" -d '<query>'
+```
+
+**Don't assume Graylog is unreachable** without checking the commented prod URL in `.env` — same pattern as `ELASTIC_SEARCH_URL` (active = local, commented = stage/prod). If a session says "Graylog not reachable from this environment", first verify it actually read both the active and the commented lines.
+
+**Source:** session 2026-05-26.
+
+---
+
+## url-change-alert
+
+**What it is** — automated email `"Urgent: URL change detection signal for N site(s)"` triggered when the **ratio of newly-active vehicles** (data index, `activeFrom` within the last crawl window) exceeds a threshold against total crawled. Format example: `EUROSTOCKS  Vehicles crawled: 30272 | Newly active vehicles: 16563 | ratio: 54.7%  CRITICAL`.
+
+**What it catches** — a site URL-pattern change combined with broken/missing `workingUrl` wiring. Symptom: `legacyUrl` changes for the same physical vehicle → new `storeId` → old doc gets deactivated AND a new doc gets activated in the SAME crawl window. Ratio spikes because half the inventory appears "fresh".
+
+**What it CAN'T distinguish on its own** — a benign re-enablement spike. When a previously-disabled site comes back online, all vehicles deactivated during the disabled period get reactivated together. `activeFrom` is updated to today on reactivation (this is real, observed: storeIds preserved, but `activeFrom` reset). Ratio looks identical to a workingUrl break: 50%+ newly-active.
+
+**Diagnostic to tell them apart — paired-deactivation count in the SAME window:**
+
+| Signal | workingUrl break | Re-enablement spike |
+|---|---|---|
+| Newly-active ratio | High (50%+) | High (50%+) |
+| Inactive-deactivated-in-same-window with same VehicleId as a newly-active | **HIGH — one paired inactive per new active** | **0 or near-0** (old deactivations happened weeks/months ago during disabled period) |
+| Multiple docs per VehicleId | **YES** — old storeId inactive + new storeId active | **NO** — one doc per VehicleId, same storeId before and after |
+
+Query for the diagnostic (replace `<SITE>`):
+```bash
+# Newly-active in last 48h
+curl -s "$ES/market-study-vehicle-data_rollover/_count" -H 'Content-Type: application/json' \
+  -d '{"query":{"bool":{"must":[{"term":{"site":"<SITE>"}},{"range":{"activeFrom":{"gte":"now-2d/d"}}}],"must_not":[{"exists":{"field":"activeTo"}}]}}}'
+# Inactive-deactivated in last 48h (the paired-deactivation count)
+curl -s "$ES/market-study-vehicle-data_rollover/_count" -H 'Content-Type: application/json' \
+  -d '{"query":{"bool":{"must":[{"term":{"site":"<SITE>"}},{"range":{"activeTo":{"gte":"now-2d/d"}}}]}}}'
+```
+If the second count ≈ the first → workingUrl break. If the second is near-0 → re-enable spike. Eurostocks 2026-05-26: 16,563 newly-active + 0 paired-deactivated → re-enable spike, not a bug.
+
+**What it misses entirely** — slow URL drift. A workingUrl misconfig that re-storeIds 1–2% of docs per day stays under threshold but silently degrades the index over months. Run W1-W5 from the crawler-data-validation skill periodically as a complement.
+
+**Possible alert improvement** (not implemented as of 2026-05-26) — add the paired-deactivation count to the report. Promote to CRITICAL only when paired count is non-zero; otherwise downgrade to INFO ("benign re-enable spike"). Saves on-call attention.
+
+**Source:** session 2026-05-26 (eurostocks re-enable on develop produced 54.7% ratio; verified benign via 0 paired deactivations).
+
+---
+
+## browser-timeout-logs
+
+**Chromium `net::ERR_*` strings are NOT in Graylog** — Puppeteer-based crawlers wrap any Chromium navigation failure (`ERR_TUNNEL_CONNECTION_FAILED`, `ERR_CONNECTION_RESET`, `ERR_PROXY_CONNECTION_FAILED`, etc.) into a single generic log: `message:"Browser timeout reached"` with `context:FETCH_EXTERNAL`. The raw `net::ERR_*` string lives only in Puppeteer stderr / local dev logs. Searching Graylog for `"TUNNEL"` / `"net::ERR"` returns 0 even during a real outage.
+
+**Correct Graylog query** — `facility:marketstudy AND site:<site> AND "Browser timeout reached"` for the failure count. The log carries `request_id` but **no `specificProxy` field**.
+
+**Correlate to proxy** — join via `request_id` to the preceding `"Starting browser request"` log (same request_id), which DOES carry `specificProxy: http://proxy.b2b.aws:90XX`. Group failures by that field to tell "one proxy down" from "site-wide DataDome pressure":
+- Single-proxy outage → 100% of timeouts on one `specificProxy` value.
+- Symmetric failure rate (~equal %) across both proxies in the pool → site-side blocking (DataDome / Cloudflare), not a proxy issue.
+
+**Example (avto-net 2026-05-27, PRESKOK_SET_1)** — 60 unique timeout request_ids over 1378 + 1257 browser requests; failure rate 15.1% on `:9007` vs 16.7% on `:9004` → symmetric → site pressure, not proxy outage.
+
+**Source:** session 2026-05-27.
+
+---
+
+## listing-vehicle-check-diagnostic
+
+When investigating `"Listing vehicle check failed in prop"` logs (`context:LISTING_VEHICLE_CHECK`), the **`existingValue` field's presence and shape is the primary diagnostic** for "is this a real listing-vs-detail mismatch or migration noise?":
+
+| `existingValue` shape | Meaning | Diagnostic |
+|---|---|---|
+| **Missing entirely** | Stored `fullVehicle[prop]` is `null`/`undefined`. `?.toString()` returned undefined, Graylog drops the key. | **Migration noise.** The previously-stored vehicle was written by older code that didn't extract this field at all. Self-heals after the details re-visit populates it. |
+| **Empty string `""`** | Stored value was explicitly empty. | Source-side: dealer never filled this field. Parser correctly stored empty; listing now returns a value → genuine drift, worth checking. |
+| **Non-empty differing value** | Both versions have a real value, they just don't match. | Real bug or genuine source-side edit. Compare the two values to decide. |
+
+**Per-prop breakdown query** — when LISTING_VEHICLE_CHECK volume spikes, drill into the dominant `prop:` to identify the field. Example query: `message:"Listing vehicle check failed in prop" AND prop:workingUrl` (or `prop:price`, `prop:mileage`, `prop:name`, etc.). The `prop` field is structured and searchable.
+
+**Concrete eurostocks example (2026-05-26 — rewrite migration)** — `prop:workingUrl` SVL fails: 9,026 day-1 → 1,828 day-2, 100% with `existingValue` missing across both days. Root cause: pre-rewrite code never extracted workingUrl; rewrite added it to both listing AND details paths in one commit (against the documented phased rollout in `fix-playbook.md § Implement workingUrl/legacyUrl`). Self-healed within 3 days.
+
+**When to act vs ignore:**
+- If `existingValue` missing dominates (≥80%) → migration noise. Expect 1–3 day decay. No action.
+- If `existingValue` is mostly non-empty differing → real parser instability. Investigate the field.
+- If volume stays elevated past 5 days → not migration; something is genuinely unstable. Check the listing-page extractor for that field.
+
+**Source:** session 2026-05-26 (eurostocks rewrite produced 10,854 workingUrl SVL fails over 48h with 100% `existingValue` missing).

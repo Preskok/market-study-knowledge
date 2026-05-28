@@ -116,17 +116,39 @@ Use string form for anything stored in Redis/MySQL/S3. `Date.now()` only for eph
 
 **Source:** session 2026-05-20.
 
-### DTO required boolean — `@IsDefined() + @IsBoolean()`
+### DTO required boolean — `@IsBoolean()` alone is sufficient
 
 ```typescript
+// GOOD — @IsDefined() is redundant, @IsBoolean() already rejects undefined and null
+@IsBoolean()
+iConfirm: boolean;
+
+// BAD — @IsDefined() adds nothing here
 @IsDefined()
 @IsBoolean()
 iConfirm: boolean;
 ```
 
-`@IsBoolean()` alone passes `undefined`. Stack `@IsDefined()` for true required booleans.
+`@IsBoolean()` already rejects `undefined` and `null`. Do not stack `@IsDefined()` on top of it.
 
-**Source:** session 2026-05-20.
+**Source:** session 2026-05-20, corrected 2026-05-25.
+
+### DTO string field — `@IsString()` allows empty string
+
+```typescript
+// GOOD — rejects empty string
+@IsString()
+@IsNotEmpty()
+reason: string;
+
+// BAD — accepts "" silently
+@IsString()
+reason: string;
+```
+
+`@IsString()` accepts `""`. Add `@IsNotEmpty()` whenever an empty string is not a valid value.
+
+**Source:** session 2026-05-25.
 
 ### Business logic in services, not controllers
 

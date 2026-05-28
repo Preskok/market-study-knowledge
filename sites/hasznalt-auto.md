@@ -1,9 +1,10 @@
 # hasznalt-auto (HU)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+🟡 **2026-05-14 WATCH** — ScrapeDo brotli decompression issue: response sent with `brotli` encoding but not decompressed, causing "Empty sub-selector" errors. Monitoring.
 
 ## History & quirks (newest first where known)
+- **2026-05-14** — "Empty sub-selector" errors from ScrapeDo sending brotli-compressed responses without decompressing (sent `Content-Encoding: br` header but raw compressed bytes). Not the same cross-user contamination pattern as autoscout-ch — specific to brotli handling. Monitoring. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1778485086288569)
 - Scrape.do allowlisted (1-credit works).
 - HTML: `#details-vehicle_information` → `#details-vehicle-information`.
 - Currency conversion after 30 days forces details re-visits.

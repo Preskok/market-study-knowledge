@@ -4,6 +4,7 @@
 _Needs manual triage — see history below and update this line when you know the current state._
 
 ## History & quirks (newest first where known)
+- **2026-05-14** — ScrapeDo returned a Turkish pet-shop JSON response for `mo-s3/mk-audi?pagination[page]=10` (different URL, same cross-user contamination pattern as the Spanish billing API below). "Empty sub-selector" thrown by cheerio (body starts with `{`, treated as CSS selector). Recurring from week to week per Filip. Monitoring. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1778485086288569)
 - **2026-05-14** — scrape.do returned a Spanish billing API JSON response (`{"success":true,"title_response":"consulta de factura"...}`) for `mo-a-200/mk-mercedes-benz?pagination[page]=4`. Body started with `{` → `$(html).find(...)` threw `Error: Empty sub-selector` (cheerio treated non-`<` body as CSS selector). Single RMQ message affected; rest of crawl continued. S3 key poisoned: `20260515/8cd9da929f09516ecc4651c3d4e412fa` (note next-day date — CEST timezone). Fix: delete S3 key; code fix pending to detect non-HTML 200 responses.
 - Scrape.do. Details persistently blocked — `skipDetailsUrlValidation: true`.
 - JSON script format variants.

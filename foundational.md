@@ -6,16 +6,27 @@ Architecture and operational context that explains WHY things are designed the w
 
 ## Index architecture (Elasticsearch)
 
-- **Old search index** — URL-unique list of all vehicles. Doesn't have `workingUrl` field. Primary lookup by URL.
+- **Old search index** — `marketstudy_search_rollover` (alias). Capitalised fields (`Site`, `URL`, `Description`, `Price`, etc.). URL-unique list of currently-active vehicles only. Primary lookup by URL.
 - **New search index** — was being built, later **frozen** (Mar 2025 deploy). Stops writing to it; reads continue.
-- **Data index** — history index. Stores `workingUrl`, change history (progressive validation), full vehicle lifecycle.
+- **Data index** — `market-study-vehicle-data_rollover` (alias). Lowercase fields (`site`, `url`, `price`, etc.). History index — stores full vehicle lifecycle, including deactivated docs and change history (progressive validation). Typically ~30x larger than the old search index (e.g. eurostocks: 30k in old vs 1M in data).
 - **S3 raw response cache** — bucket `$AWS_S3_BUCKET_DAILY_CACHE`, keys `YYYYMMDD/[md5-hash]`. 7-day retention. Used by crawler for rerun on same day without repeat external requests.
 
 The `workingUrl` vs `legacyUrl` pattern exists because sites change URL formats:
-- `legacyUrl` — stable key used for S3 cache + deduplication (don't change!)
-- `workingUrl` — current URL to actually fetch (update when site changes)
+- `legacyUrl` — stable key used for S3 cache + deduplication. `storeId = md5(legacyUrl)`. Saved to **old search index `URL` field as-is** — it never gets rewritten there.
+- `workingUrl` — current URL to actually fetch (update when site changes). On the in-memory `AdVehicle` object only. **At ES write time, [search-vehicle.service.ts:256](src/vehicle/search-vehicle.service.ts) does `url: vehicle.workingUrl ?? vehicle.url`** — so the data index `url` field contains the working URL when one is set, and the legacy URL otherwise.
+- `workingUrl` is **NOT a separate persisted ES field.** Don't expect it in `_source`. It exists only in: in-memory AdVehicle → raw S3 vehicle JSON → swapped into `url` at write-time.
+
+**Consequence for the same vehicle:**
+- Old search index `URL` = legacy URL (e.g. `…/vehicles/cars/{bodyType}/vehicle/{id}/…`)
+- Data index `url` = working URL (e.g. `…/en/vehicle/{id}/…`)
+
+This is **by design** — don't flag the mismatch as a workingUrl-migration bug.
 
 See [Working URL fix docs](https://preskok.atlassian.net/wiki/spaces/M/pages/3002302476/Working+URL+fix).
+
+### Validation gate split between indices
+
+The `"Skip saving data vehicle to ES due to failed validation"` log (context `VALIDATION`) **only blocks writes to the data index**. The old search index write path runs separately and **does not consume the same validation result** — bad docs (e.g. negative prices) can still appear in `marketstudy_search_rollover` even when their data-index counterpart was rejected. **This is the current architectural behaviour, not a bug** — it's a known split. When investigating "validation says skipped, why is it still in ES?", check which index you're looking at: probably the old search index.
 
 ---
 

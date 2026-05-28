@@ -1,9 +1,10 @@
 # auto-aramis (FR)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+ℹ️ **2026-05-18 INFO** — Slight drop 2.75k→~2.5k; site shows 2533 — legitimate stock change ✅.
 
 ## History & quirks (newest first where known)
+- **2026-05-18** — Slight drop 2.75k→~2.5k. Site confirmed 2533 vehicles; drop is legitimate. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779107075945509)
 - `rawIsUsed.includes('occasion')` no safeguard.
 - bodyType footer removed.
 

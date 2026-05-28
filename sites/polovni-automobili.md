@@ -1,9 +1,10 @@
 # polovni-automobili (RS)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+🟡 **2026-05-22 WATCH** — Unstable graph: 78k→72k→>78k (even 84k some days). Monitoring — may be organic stock increase.
 
 ## History & quirks (newest first where known)
+- **2026-05-18→2026-05-22** — Numbers dropped from 78k to 72k since 2026-05-18. Recovered to >78k (84k on 2 days) by May 22. Graph unstable — further tracking needed next week. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779107075945509)
 - Supermodel vs model duplicates.
 - Empty brand → cheerio error.
 - `+` in model names → `%2B`.

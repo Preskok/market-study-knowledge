@@ -1,7 +1,7 @@
 # autoplius (LT)
 
 ## Current status
-🟢 **2026-05-09 OK** — Flow test passed. 12 vehicles, 10 with equipment, 4 dealers extracted.
+🟡 **2026-05-29 WATCH** — Intermittent 403 Cloudflare blocks causing 20–23% vehicle drops on 2 out of 3 days. MAR-2110 opened. Monitoring; fix only if issue persists.
 
 ## Test brand+model
 - brand: -kita-
@@ -10,6 +10,7 @@
 - notes: First brand alphabetically from autoplius API. Strategy A (break-on-first-push), no brand filter needed. Uses `MS_BROWSER_CRAWLERS_LISTING_URLS_TO_FETCH`. parseDealer confirmed (4 dealers in raw-dealers index).
 
 ## History & quirks (newest first where known)
+- **2026-05-29** — Intermittent 403 Cloudflare blocks: 20% fewer vehicles one day (recovered next), then 23% fewer again. 403s not retrying successfully on listings (unusual — retries normally work). Single curl on listings page 5 returned Cloudflare. Autoplius has always had Cloudflare but retries used to handle it. MAR-2110 ticket opened. Monitoring. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779682055148269)
 - **2026-05-09** — Flow test passed: all phases ✅. Strategy A picks `-kita-`/`-kita-` as first brand+model.
 - 2025-03 long-term-rental vehicles bug (monthly prices as full price) — some ads are leasing masquerading as buy price.
 - Cloudflare wave — 6.5k 403s vs normal <100. Hourly blocking pattern observed Sept 2023 (Cloudflare blocks requests in bursts, not continuously).

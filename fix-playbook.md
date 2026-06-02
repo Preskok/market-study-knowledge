@@ -426,6 +426,35 @@ Context: Subito on DataDome proxies hit 60% on fresh proxies, dropped to 30% aft
 
 ## Investigation techniques (non-code)
 
+### Next.js App Router site — where to find parseable data
+
+Sites using Next.js App Router (identified by absence of `__NEXT_DATA__` script tag and presence of `self.__next_f.push([1,"..."])` inline scripts) embed data in RSC streaming payload in the static HTML. No JS execution needed.
+
+**Step 1 — detect App Router vs Pages Router:**
+```bash
+grep -c '__NEXT_DATA__' response.html   # Pages Router: >0. App Router: 0
+grep -c 'self.__next_f' response.html   # App Router: >0
+```
+
+**Step 2 — find data in RSC pushes:**
+```python
+import json, re
+pushes = re.findall(r'self\.__next_f\.push\(\[1,"((?:[^"\\]|\\[\s\S])*)"\]\)', body)
+for i, p in enumerate(pushes):
+    decoded = json.loads('"' + p + '"')   # decode JS string literal
+    if '"posts":[' in decoded or '"makes":[' in decoded:
+        print(f'push[{i}] has data')
+        # look for field names: posts, makes, products, listings, items, data, results
+```
+
+**Step 3 — extract with balanced bracket parser** (implemented in `AutoConnect.service.ts` as `extractFromRscPayload` + `extractJsonArray`).
+
+**Key pattern:** main/unfiltered listing page has full `posts` array. Brand-path pages (`/BMW`) may return only featured posts (~4). Brand+model query-param pages (`?make1=BMW&model1=3-Series`) return full filtered posts.
+
+**`autoconnect.interoffice.al` lesson:** if the site's RSC pushes contain skeleton components and no data, the data comes from an internal backend domain. Check `<link rel="preconnect">` headers — if it's an internal subdomain (e.g. `*.interoffice.*`, `*.internal.*`), JS-enabled Puppeteer won't help because DNS won't resolve externally.
+
+**Source:** session 2026-06-01 (auto-connect HTML refactor investigation).
+
 ### ScraperAPI per-domain stats
 Dashboard shows success/fail per credit tier. Project `requests/day × avg credits` to decide disabling.
 
@@ -453,6 +482,50 @@ Cross-check with RMQ duplicates to confirm "instance-died" pattern.
 ---
 
 ## Code Patterns — Crawler Implementation Quality
+
+### RSC payload extraction (Next.js App Router sites)
+
+Copy `extractFromRscPayload` + `extractJsonArray` from `AutoConnect.service.ts` into any App Router site's service. Finds any named array in the RSC streaming payload without JS execution.
+
+```typescript
+private extractFromRscPayload(html: string): { posts: Record<string, unknown>[]; makes: string[] } {
+    const result = { posts: [] as Record<string, unknown>[], makes: [] as string[] };
+    if (!html) return result;
+
+    const scriptRegex = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\[\s\S])*)"\]\)/g;
+    let match: RegExpExecArray | null;
+    while ((match = scriptRegex.exec(html)) !== null) {
+        let decoded: string;
+        try { decoded = JSON.parse(`"${match[1]}"`); } catch { continue; }
+
+        if (!result.makes.length) {
+            const idx = decoded.indexOf('"makes":[');
+            if (idx !== -1) { const arr = this.extractJsonArray(decoded, idx + 8); if (arr) try { result.makes = JSON.parse(arr); } catch {} }
+        }
+        if (!result.posts.length) {
+            const idx = decoded.indexOf('"posts":[');
+            if (idx !== -1) { const arr = this.extractJsonArray(decoded, idx + 8); if (arr) try { result.posts = JSON.parse(arr); } catch {} }
+        }
+        if (result.makes.length && result.posts.length) break;
+    }
+    return result;
+}
+
+private extractJsonArray(text: string, startIdx: number): string | null {
+    let depth = 0, i = startIdx;
+    while (i < text.length) {
+        const c = text[i];
+        if (c === '[' || c === '{') depth++;
+        else if (c === ']' || c === '}') { depth--; if (depth === 0) return text.slice(startIdx, i + 1); }
+        else if (c === '"') { i++; while (i < text.length && text[i] !== '"') { if (text[i] === '\\') i++; i++; } }
+        i++;
+    }
+    return null;
+}
+```
+
+**Field names to try:** `posts`, `makes`, `listings`, `vehicles`, `products`, `items`, `results`, `data`, `ads`.
+**Source:** session 2026-06-01 (auto-connect refactor).
 
 Apply these automatically when implementing or reviewing any crawler. These were established through Eurostocks refactoring session.
 

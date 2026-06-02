@@ -179,7 +179,7 @@ Paste directly (no code block). `*text*` = bold in Slack.
 
 ## scraperapi
 
-**Credit costs per site** — avto-net: **10 credits/req**, leboncoin: **1 credit/req**, lacentrale: **35 credits/req** (ultra-premium only).
+**Credit costs per site** — avto-net: **10 credits/req**, leboncoin: **1 credit/req**, lacentrale: **35 credits/req** (ultra-premium only), auto-connect makes+models: **1 credit/req** (regular tier sufficient, CF does not challenge scrape.do datacenter IPs on these endpoints).
 
 **Escalation** — standard request (1st-2nd attempt) → premium proxy (3rd) → ultra-premium proxy (4th). Each retry tier consumes more credits.
 

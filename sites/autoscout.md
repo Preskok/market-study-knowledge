@@ -1,9 +1,10 @@
 # autoscout (DE, HUGE — ~2M vehicles)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+🟡 **2026-05-28 WATCH** — 2 hotfixes deployed for URL format change (follow-redirects + strip `-cat_*-` from legacy URL). Newly active vehicles stabilizing: 64k on 2026-05-28 (down from 345k spike). Monitor in following days.
 
 ## History & quirks (newest first where known)
+- **2026-05-26→2026-05-28** — URL format change: details URLs switched to English words (fuelType/colour) and added `-cat_*-` segment. Hotfix 1: follow redirects for details requests. Hotfix 2: strip `-cat_*-` when generating legacy URL. Both deployed 2026-05-26. Result: 345k newly active vehicles on 2026-05-27 (vs usual ~50k), NL disproportionately represented (~25% vs 12% of total stock). Same pattern as 2026-03-04 UUID/URL mismatch. 2026-05-28 stabilized at 64k newly active. maxPagination may be raiseable (site now allows 200 pages; we use 20). 3 pre-existing workingUrl SVL fails (`angebote`→`offers` mapping). [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779797371973579)
 - GraphQL endpoint moved to `listing-search.api.autoscout24.com/graphql`. Brands from HTML, models from REST `/as24-home/api/taxonomy/cars/makes/{id}/models`.
 - 2025-02 listing HTML restructure → mass SVL fail (`name` null for 2M). "Friday troublemaker".
 - URL slug duplicates: titles with multiple consecutive `-`.

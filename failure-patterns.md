@@ -177,6 +177,22 @@
 **Example:** otomoto `20250411/1f3c3e534262e590c248495528c63c84` looped repeatedly.
 **Fix:** `AWS_PROFILE=preskok-prod aws s3 rm s3://$AWS_S3_BUCKET_DAILY_CACHE/YYYYMMDD/[hash]`. Deploy `isServerError()` improvement first to prevent re-save.
 
+### 33b. Cloudflare 52x cached as valid → DL alert flood
+**Signal:** 3000+ alert emails overnight. `TypeError: X is not iterable` or `TypeError: Cannot read properties of null` on listing consumer. Root S3 response has `statusCode: 52x` and empty body.
+**Root cause:** Cloudflare 520–527 (origin-side errors) returned HTTP 200 wrapper from CDN. `isServerError()` only covers 500–507 → 52x gets cached as valid → every consumer reads poisoned cache → TypeError per listing message → MS_DL × N.
+**Example:** auto-connect 2026-05-31 — 526 (SSL handshake failed) cached → 3000 DL alerts. Saturday crawl.
+**Fix:** Override `isServerError()` in the site service to include 520–527:
+```typescript
+public isServerError({ response, responseBody }): boolean {
+    const statusCode = response?.statusCode;
+    const isCloudflareOriginError = statusCode >= 520 && statusCode <= 527;
+    return isCloudflareOriginError || super.isServerError({ response, responseBody });
+}
+```
+Also add `listingVehicles ?? []` guard in `getVehicleListPageResponse` as defense-in-depth to stop the TypeError from hitting DL queue even if a bad response slips through.
+**Generalizable:** Any CF-proxied site. If S3 body has `"statusCode":52x` and empty body, the site had a Cloudflare origin error that was mis-cached.
+**Tags:** `fake-200` `s3` `null-parse` `ms-dl` `cloudflare`
+
 ---
 
 ## Data / Validation

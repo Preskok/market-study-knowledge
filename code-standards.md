@@ -324,3 +324,23 @@ await this.notifyLockedSites(newlyLocked, allLockedSites);
 ```
 
 **Source:** session 2026-05-20.
+
+### scrape.do — always test 1-credit tier before assuming super is needed
+
+Default to `superAtRetry: null` (1 credit/request, datacenter proxies). Only escalate to `superAtRetry: 0` (10 credits, residential) if 1cr returns 502 RotationFailed or consistent 403s. Many CF-protected endpoints that seem blocked pass through on 1cr.
+
+```typescript
+// DEFAULT — start cheap, escalate only if needed
+private readonly scrapeDoProxyConfig: ScrapeDoProxyConfig = {
+    superAtRetry: null,       // 1 credit, datacenter
+    superBrowserAtRetry: null,
+};
+
+// Only if 1cr fails consistently:
+private readonly scrapeDoProxyConfig: ScrapeDoProxyConfig = {
+    superAtRetry: 0,          // 10 credits, residential from first retry
+    superBrowserAtRetry: null,
+};
+```
+
+**Source:** session 2026-06-01 (auto-connect — assumed super needed, 1cr worked fine).

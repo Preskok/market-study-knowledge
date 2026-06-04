@@ -344,3 +344,330 @@ private readonly scrapeDoProxyConfig: ScrapeDoProxyConfig = {
 ```
 
 **Source:** session 2026-06-01 (auto-connect — assumed super needed, 1cr worked fine).
+
+### DTO confirmation flag — `@IsIn([true])`, drop the controller guard
+
+```typescript
+// DTO — literal true is the only valid value
+@IsIn([true])
+iConfirm: true;
+```
+```typescript
+// controller — NO manual guard needed; class-validator rejects false/undefined
+// with a descriptive error logged at the interceptor level
+async lockSiteDeactivation(@Body() body: LockDeactivationForSiteDto): Promise<void> {
+    return this.service.lock(body.site, body.reason);
+}
+```
+
+For an explicit opt-in flag, `@IsIn([true])` (typed `iConfirm: true`) is stricter than `@IsBoolean()` and removes the `if (!body.iConfirm) throw new BadRequestException(...)` guard from the controller.
+
+**Source:** session 2026-06-02.
+
+### DTO inheritance for shared fields
+
+```typescript
+export class UnlockDeactivationForSiteDto {
+    @IsEnum(AvailableAdSiteKeysEnum)
+    site: AvailableAdSiteKeysEnum;
+
+    @IsIn([true])
+    iConfirm: true;
+}
+
+export class LockDeactivationForSiteDto extends UnlockDeactivationForSiteDto {
+    @IsString()
+    @IsNotEmpty()
+    reason: string;
+}
+```
+
+Two DTOs sharing fields go in one file; the larger one `extends` the smaller. No duplicated validators.
+
+**Source:** session 2026-06-02.
+
+### One interface file per domain — `<Domain>.interface.ts`
+
+All interfaces/types for one service domain live in a single `<Domain>.interface.ts` (e.g. `ActiveVehicle.interface.ts`), not file-per-interface. If an interface is used only where a const is defined, inline it there instead of a separate file.
+
+**Source:** session 2026-06-02.
+
+### Reuse existing Graylog log fields — don't introduce new ones
+
+```typescript
+// GOOD — reuse errorMessage (existing text field in Graylog)
+this.logger.warn({ message: 'Deactivation LOCKED for site', site, errorMessage: reason }, LoggingContexts.ACTIVE_VEHICLES);
+
+// BAD — new field name needs ES schema buy-in, costs retention
+this.logger.warn({ message: '...', site, ratioPercent: 42 }, ...);
+```
+
+Graylog ES is shared across projects with ~7-day retention. Reuse `errorMessage` (safe text field) for ad-hoc context rather than adding new field names. Prefer one log line per `site` so it filters cleanly on the `site` field.
+
+**Source:** session 2026-06-02.
+
+### `DataHelper.normalizeNumericValue` over `parseInt` for raw SQL strings
+
+```typescript
+// GOOD
+todayCount: DataHelper.normalizeNumericValue(row.todayCount),
+
+// BAD
+todayCount: parseInt(row.todayCount) || 0,
+```
+
+Raw query results (`getRawMany`) return numeric columns as strings — convert with `DataHelper.normalizeNumericValue`, not `parseInt`. (`SUM()`/`COUNT()` on a non-empty GROUP never returns null, so no `|| 0` fallback needed.)
+
+**Source:** session 2026-06-02.
+
+### Destructure params — don't pass a default just to reach a later arg
+
+```typescript
+// GOOD — object params, caller omits defaults
+public async getVehiclesBeforeDate({ beforeDate, limit = 1000, excludeSites = [] }: { beforeDate: Date, limit?: number, excludeSites?: Array<RunnableAdSiteKey> }): Promise<...> {}
+// caller:
+await repo.getVehiclesBeforeDate({ beforeDate, excludeSites });
+
+// BAD — forced to pass the default 1000 positionally to reach excludeSites
+await repo.getVehiclesBeforeDate(beforeDate, 1000, excludeSites);
+```
+
+When a method's optional middle param has a default and a caller only needs a later param, switch to a destructured object param. See JS+TS Standards § Parameters destructuring.
+
+**Source:** session 2026-06-02.
+
+### No-op guard — use if/else, not early return
+
+For a branch that does nothing (no-op), use `if/else` rather than an early `return`.
+
+```typescript
+// GOOD
+if (deactivatedSites[site]) {
+    this.logger.log({ message: 'Already locked — skipping', site }, ctx);
+} else {
+    // ... do the work ...
+}
+
+// BAD
+if (deactivatedSites[site]) {
+    this.logger.log({ message: 'Already locked — skipping', site }, ctx);
+    return;
+}
+// ... do the work ...
+```
+
+**Source:** session 2026-06-03.
+
+### Extract complex threshold / decision logic to a named private method
+
+When a service method needs to resolve a value through multi-step branching (e.g. priority chain, group lookup), extract to `private get<Noun>(arg): Type` with a docblock. Keep the calling method clean.
+
+```typescript
+// In evaluateSiteLocks — clean call site
+const threshold = this.getSiteThreshold(site);
+
+// Dedicated method — all the branching lives here
+/**
+ * Resolves the deactivation prevention threshold for a site.
+ * Priority: perSite override → site size + crawl frequency.
+ */
+private getSiteThreshold(site: RunnableAdSiteKey): number {
+    const isNthDayCrawler = !!CrawlingSites[site].runOnNthDays;
+    const crawlerType = isNthDayCrawler ? 'nthDay' : 'daily';
+    const siteGroup = SiteThresholds[site] === 0.1
+        ? DeactivationPreventionThresholds.largeSite
+        : DeactivationPreventionThresholds.smallSite;
+    return DeactivationPreventionThresholds.perSite[site] ?? siteGroup[crawlerType];
+}
+```
+
+**Source:** session 2026-06-03.
+
+### New methods go at the end of the service file
+
+Existing (pre-ticket) methods stay at the top. All methods added in a PR go below them — never interspersed. Keeps diffs clean and reviewers focused on what changed.
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Re-throw exceptions that should be retried by the scheduler
+
+```typescript
+// GOOD — HTTP 500 triggers cron retry
+} catch (ex) {
+    this.logger.error({ message: '...', errorMessage: ex.message }, ex.stack, ctx);
+    throw ex; // re-throw so external scheduler can retry
+}
+
+// BAD — silent return masks failure, cron thinks it succeeded
+} catch (ex) {
+    this.logger.error({ message: '...' }, ex.stack, ctx);
+    return;
+}
+```
+
+Add a comment explaining WHY the throw is there — it's not the usual pattern and reviewers will question it.
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Don't guard against impossible cases
+
+Remove optional chaining (`?.`), null checks, or fallback values when the type or flow guarantees the value exists. Defensive code that can never fire misleads readers into thinking the case is possible.
+
+```typescript
+// BAD — site is always a key of preventedSites, ?.reason is impossible to be undefined
+errorMessage: preventedSites[site]?.reason,
+
+// GOOD
+errorMessage: preventedSites[site].reason,
+```
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Don't commit development artifacts in PRs
+
+`.gitignore` entries for personal tooling (IDE files, Claude state, local knowledge base) should be handled via IDE's own ignore settings — not committed to the repo. Similarly, `.http` test requests for endpoints that are dangerous to call manually (e.g. `check-and-prevent-deactivation`) should not be in committed `.http` files.
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Prefer CrawlingSites config over MySQL for site configuration
+
+```typescript
+// GOOD — live config, always up to date
+const isNthDayCrawler = !!CrawlingSites[site].runOnNthDays;
+
+// BAD — stale; insertOrUpdate doesn't update runOnNthDays column
+const isNthDayCrawler = !!vehicleVisitEntity.runOnNthDays;
+```
+
+`runOnNthDays` in `vehicle_visit` is only set on INSERT, not updated on re-crawl. CrawlingSites config reflects current intent.
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Exception variable — always `ex`, never `e`/`err`/`error`
+
+```typescript
+// GOOD
+} catch (ex) {
+    this.logger.error({ message: ex.message }, ex.stack, ctx);
+}
+
+// BAD
+} catch (e) { ... }
+} catch (err) { ... }
+} catch (error) { ... }
+```
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Service timing — `const start = Date.now()` + `durationMilliseconds` in finish log
+
+Every public service method that does meaningful work starts a timer and logs it on finish. Use existing numeric fields where possible.
+
+```typescript
+public async doWork(): Promise<void> {
+    const start = Date.now();
+    this.logger.log({ message: 'Starting ...' }, ctx);
+
+    // ... work ...
+
+    this.logger.log({
+        message: 'Finished ...',
+        count: itemsProcessed,
+        durationMilliseconds: Date.now() - start,
+    }, ctx);
+}
+```
+
+**Source:** session 2026-06-03 (mlencek PR #21, also `store-vehicle.service.ts`, `deleted-data-vehicle.service.ts`).
+
+### Don't pass a param that will always be today's date
+
+If a method parameter is always today's date (or any constant derived from `Date.now()`), compute it inside the method. Accepting it as a param implies callers might pass a different value, creating false API surface.
+
+```typescript
+// BAD — todayDateStr is always today, param implies flexibility that doesn't exist
+public calculateRatios(rows: Array<Row>, todayDateStr: string): Result {}
+
+// GOOD — compute inside
+public calculateRatios(rows: Array<Row>): Result {
+    const today = DateHelper.toFormattedString({ format: 'YYYY-MM-DD' });
+}
+```
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Timestamp storage — use `DateHelper.toISOString`, don't format as UTC string
+
+```typescript
+// GOOD — consistent with rest of codebase Redis values
+timestamp: DateHelper.toISOString({}),
+
+// BAD — UTC string format is inconsistent with how timestamps are stored elsewhere
+const format = 'YYYY-MM-DD HH:mm:ss [UTC]';
+toFormattedString({ date: entry.timestamp, format })
+```
+
+The rest of the codebase does not work in UTC explicitly. Adding UTC-formatted strings only in one place is confusing to readers of Redis or email output.
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Alert email subjects must be immediately distinguishable
+
+Subjects that are nearly identical (differing only by an emoji) are easy to overlook in inbox filtering. Critical alerts (like deactivation locks) need unique, action-oriented subjects.
+
+```typescript
+// BAD — differ only by ⚠️ emoji, easy to miss
+'⚠️ Deactivation prevention: 2 new site(s) locked (5 total)'
+'Deactivation prevention: 5 site(s) currently locked'
+
+// GOOD — "NEW" in subject makes it scannable and filterable
+'⚠️ Alert: 2 NEW site(s) locked deactivation'
+```
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### No try/catch around email sends unless there's a real failure mode
+
+```typescript
+// BAD — not done elsewhere, adds noise, hides that errors propagate normally
+try {
+    await this.commonEmailsService.sendReportingEmail({ ... });
+} catch (emailEx) { ... }
+
+// GOOD — let it propagate; if email fails the caller sees it
+await this.commonEmailsService.sendReportingEmail({ ... });
+```
+
+**Source:** session 2026-06-03 (mlencek PR #21).
+
+### Make `dateField`-style options required — no silent defaults
+
+When a method is called from multiple places with different semantics (e.g. one caller needs `activeFrom`, another needs `createdAt`), make the option required with no default. Forces every caller to be explicit and prevents silent mismatches.
+
+```typescript
+// BAD — default hides intent, callers silently get wrong behaviour
+public async getVehiclesBySiteAndDate({
+    dateField = 'activeFrom',
+}: ... & { dateField?: 'activeFrom' | 'createdAt' })
+
+// GOOD — required, every caller documents its intent
+public async getVehiclesBySiteAndDate({
+    dateField,
+}: ... & { dateField: 'activeFrom' | 'createdAt' })
+```
+
+**Source:** session 2026-06-04 (MAR-1975 — export uses createdAt, URL-fix uses activeFrom).
+
+### Vehicles read from the Data index are already mapped — use saveVehiclesToDataIndex
+
+Vehicles fetched from the ES Data index (`DataAdVehicle`) have already been through the Data API mapping pipeline. Sending them to `sendVehicleInputsForDataMapping` again is unnecessary and uses a channel (`DATA_SEND_JOBS`) not open in WORKER mode. Use `saveVehiclesToDataIndex` instead (sends to `MS_SEND_BULK_SAVE_JOBS`, open in WORKER).
+
+```typescript
+// BAD — re-maps already-mapped vehicles, wrong channel for WORKER mode
+await this.crawlerMessagesRoutingService.sendVehicleInputsForDataMapping(vehicles);
+
+// GOOD — vehicles from Data index are already mapped
+await this.crawlerMessagesRoutingService.saveVehiclesToDataIndex(vehicles);
+```
+
+**Source:** session 2026-06-04 (MAR-1975 update-vehicle-urls service).

@@ -44,6 +44,8 @@ Curated answers for `ams [topic]` queries. Each entry: dense bullets + Source li
 
 **Rollover duplicate inflation** — when a rollover happens mid-week, the same `storeId` can exist in two backing indices (pre-rollover and post-rollover). A `_search` or `_count` query across the alias returns BOTH copies — inflating totals. Symptom: raw doc count is e.g. 1.4×–2× higher than vehicle count on source site. Diagnosis: run a cardinality aggregation on `URL` field — the cardinality result is the true vehicle count; the difference is rollover duplicates. This is expected behaviour, not a crawler bug. Observed: autohaus-landherr 629 total / 442 unique URL in 7-day window vs 444 on site (2026-05-27). The 1.42× ratio matches a mix of 1× and 2× crawl days (midnight fail + 6 AM retry).
 
+**`rawBrand`/`rawModel`/`rawVersion` in Data index** — these fields ARE reliably present. Populated in `createDataAdVehicle()` from `vehicle.brand`/`vehicle.model`/`vehicle.version` (not from `vehicle.rawBrand` — older S3 store records pre-date the raw fields and stored raw values in `brand`). The S3 store record's `.rawBrand` can be `undefined` for old records; the Data index's `rawBrand` is the more reliable source for new records. Only fall back to S3 raw fields when you need the most precise value for slug rebuilding.
+
 **Source:** session 2026-05-27.
 
 **Kibana CreatedAt histogram is misleading for "vehicle age"** — a `site:"<SITE>"` discover view bucketed by `CreatedAt` shows when docs were last written, NOT how old the vehicles are. During an in-progress crawl you'll see two bars (e.g. ~20k pinned at the previous run's date, ~10k at today) — both groups can be any mix of brand-new and continuously-tracked-for-years vehicles. After the crawl finishes everything collapses to today. To measure actual age, switch to the data index and bucket by `activeFrom` instead. Note: `activeFrom` ALSO resets on reactivation (vehicle deactivated then re-detected → fresh `activeFrom`), so even this isn't perfect — but it's the closest thing to "first seen".
@@ -127,11 +129,23 @@ Paste directly (no code block). `*text*` = bold in Slack.
 
 **Manual lock** — can lock a specific site to prevent deactivation tonight. Used during hotfixes when crawl is broken but we don't want mass-deactivation.
 
-**Per-site auto-lock (Redis)** — `DEACTIVATION_PREVENTED_SITES` key holds a JSON map of `site → { timestamp, reason }`. Written with `TimeEnum.ONE_YEAR_IN_SECONDS` TTL (31536000 s) so it never expires naturally. Populated by `checkAndPreventDeactivationBySite` cron when missing-vehicle ratio exceeds `DeactivationPreventionThresholds`. Already-locked sites are excluded from the MySQL ratio query (8-day window). Unlock is manual via `unlockSiteDeactivation` endpoint. Email notification: one consolidated email per cron run — newly locked sites at top (⚠️ header), already-locked sites below.
+**Per-site auto-lock (Redis, MAR-2102)** — `DEACTIVATION_PREVENTED_SITES` key holds a JSON map of `site → { timestamp, reason }`, written with `TimeEnum.ONE_YEAR_IN_SECONDS` TTL so it never expires naturally. Populated by `check-and-prevent-deactivation` cron at **21:30** (before 22:00 deactivation) via `checkAndPreventDeactivationBySite`. Unlock is manual via `unlock-site-deactivation` endpoint; manual lock via `lock-site-deactivation` (also sends an alert email). Already-locked sites are excluded from the ratio query, so a lock can never be silently lost by a config change.
+
+**Ratio query (2-bucket)** — `getVehicleVisitCountsBySite` groups `vehicle_visit` per site into `todayCount` = `SUM(DATE(lastVisit)=CURDATE())` and `prevCount` = `SUM(DATE(lastVisit)<CURDATE())`. ratio = `prevCount / (prevCount + todayCount)` — high ratio = many previously-seen vehicles not re-crawled today (would be deactivated tonight). nth-day crawlers only evaluated on their scheduled day (`SiteHelper.shouldSiteRunToday`).
+
+**Thresholds** — resolved by `getSiteThreshold(site)` in priority order: (1) `DeactivationPreventionThresholds.perSite[site]` explicit override; (2) `largeSite`/`smallSite` × `daily`/`nthDay` group from `DeactivationPreventionThresholds` const, where site size = `SiteThresholds[site]` (0.1=large→0.2/0.3, 0.2=small→0.5/0.6) and crawl frequency from live `CrawlingSites.runOnNthDays`. All `AvailableAdSiteKey` sites covered by `SiteThresholds` so no global default fallback needed.
+
+**Manual lock behaviour** — `lock-site-deactivation` is a no-op if site already in Redis (preserves original lock timestamp). Alert email only fires on new locks. `unlock-site-deactivation` removes the entry.
+
+**Email** — only for **newly** locked sites: `⚠️ Alert: N NEW site(s) locked deactivation`. Sent from `reporting.service.sendDeactivationPreventionAlert` (ActiveVehicleModule imports ReportingModule, not MailerModule). Existing-locks reminder email is a future ticket.
+
+**Crawl-pattern-change edge cases** — developer responsibility when changing `runOnNthDays`/`matchingDay`. nth-day→daily on change day: can produce a *false* lock (acceptable — unlock manually) but never a *missed* lock since `shouldSiteRunToday=true`. daily→nth-day handled correctly: prevention check fires on the crawl day; on non-crawl days site is skipped (correct).
+
+**`runOnNthDays` goes stale in `vehicle_visit`** — `insertOrUpdate` orUpdate columns are `['hash','lastVisit','site']` — NOT `runOnNthDays`. Existing rows keep their old value after a crawl-pattern change until re-inserted, so the deactivation interval `IFNULL(runOnNthDays,1)` uses the stale value. Pre-existing; separate ticket.
 
 **Mid-day deploy protocol** — lock deactivation → deploy → rerun crawler (S3 cached responses, no credits) → verify → redeliver DL → unlock.
 
-**Source:** `references/foundational.md § Deactivation pipeline`, `§ Mid-day deploy protocol`.
+**Source:** `references/foundational.md § Deactivation pipeline`; session 2026-06-02 (MAR-2102 PR #21 review).
 
 ---
 
@@ -1110,3 +1124,28 @@ When investigating `"Listing vehicle check failed in prop"` logs (`context:LISTI
 - If volume stays elevated past 5 days → not migration; something is genuinely unstable. Check the listing-page extractor for that field.
 
 **Source:** session 2026-05-26 (eurostocks rewrite produced 10,854 workingUrl SVL fails over 48h with 100% `existingValue` missing).
+
+---
+
+## export-import-local-testing
+
+**Purpose** — seed local ES Data index + S3 store with prod/stage data for realistic data-fix testing without touching prod.
+
+**Export endpoint** — `POST /api/v1/export/vehicles` (on `feature/no-ticket-s3-import-and-export` branch). Reads ES Data index + S3 store for a site/date range and writes a single JSON file to `./tmp/exports/` on the local machine. Filters by `createdAt` (matches Kibana default time field). Date range should match what you see in Kibana for the problematic vehicles.
+
+**Export file shape** — one JSON with two sections: `esRecords` (array of `DataAdVehicle` _source docs) + `s3Records` (map of `url → AdVehicle` from S3 store). `missingS3Count` in response = ES docs with no matching S3 record.
+
+**Import endpoint** — `POST /api/v1/data-restore/import-vehicles`. Reads the JSON file, bulk-indexes `esRecords` into local ES Data index, writes `s3Records` to local S3 store. Pass `filePath` from the export response.
+
+**Full workflow:**
+1. Create a TEST branch from the feature branch (`git checkout -b feature/TEST-...`)
+2. Cherry-pick the export/import commit from `feature/no-ticket-s3-import-and-export` (`git cherry-pick --no-commit <hash>`)
+3. Switch `.env` S3 block to PROD + switch `ELASTIC_SEARCH_URL` to prod
+4. Start worker, run `POST /export/vehicles` → file lands locally in `./tmp/exports/`
+5. Switch `.env` back to LOCAL, restart worker
+6. Run `POST /data-restore/import-vehicles` with the filePath
+7. Switch to original feature branch and run the data fix against local data
+
+**Check export completion** — the endpoint blocks but HTTP clients often time out. File appears only when fully written (`fs.writeFile` is atomic). Check: `ls -lh ./tmp/exports/<file>` — presence = success. Graylog: look for `"Finished exporting vehicles"` log.
+
+**Source:** session 2026-06-04 (MAR-1975 otomoto URL fix — exported 33k docs, 86MB file).

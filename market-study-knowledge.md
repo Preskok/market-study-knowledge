@@ -860,13 +860,20 @@ if (process.env.APPLICATION_MODE && process.env.APPLICATION_MODE !== application
 - `fix-active-to` — corrects vehicles missing `activeTo` on first crawl (MAR-816)
 - `fix-s3-url-sid` — strips session IDs from S3 URLs, dedups (MAR-851)
 - `fix-s3-history` — rebuilds S3 history for given URLs
+- `update-vehicle-urls` — migrates old URLs to clean URLs in S3 + Data ES; merges histories if clean URL record already exists (MAR-1975). Service: `src/data-fix/remove-sid-from-s3-fix/update-vehicle-urls.service.ts`.
 
 **`src/data-restore/data-restore.controller.ts`**:
 - `import-from-old-es-to-s3` — migrate vehicle data from legacy ES → S3, async tasks queued
 
 **Both modules require WORKER or unset mode** (BULK_SAVER doesn't load them).
 
-**Source:** `src/data-fix/`, `src/data-restore/`.
+**`update-vehicle-urls` key behaviors:**
+- Queries ES Data index by `activeFrom` in date range (not `createdAt`, not `activeTo`). Deactivated vehicles are still returned if `activeFrom` is in range.
+- `recalculateVehiclesHistoryAndWriteToS3` deletes `activeTo` from inputs and recomputes from `createdAt` diffs — always returns vehicles in an "active" state unless `shouldKeepActiveVehicle: false`. In the URL-fix context clean URL records can be deactivated → read `originalActiveTo` from the newest record first, pass `shouldKeepActiveVehicle: !originalActiveTo`, then restore `originalActiveTo` after recalculate if it was set.
+- `recalculate` returns `[]` when data is identical even if URLs differ (e.g. only `url` field changed). Force-write fallback: call `writeVehicleToS3` directly and push result into the array so the old URL record still gets deleted.
+- `skippedUnsafeToRebuildCount` — `cleanUrl()` returns `null` when it cannot safely rebuild (e.g. Otomoto slug mismatch between rawModel and URL). Safe to ignore; these vehicles keep their old URL.
+
+**Source:** session 2026-06-08 (MAR-1975 — otomoto URL fix, 5+1 test cases).
 
 ---
 
@@ -1149,3 +1156,29 @@ When investigating `"Listing vehicle check failed in prop"` logs (`context:LISTI
 **Check export completion** — the endpoint blocks but HTTP clients often time out. File appears only when fully written (`fs.writeFile` is atomic). Check: `ls -lh ./tmp/exports/<file>` — presence = success. Graylog: look for `"Finished exporting vehicles"` log.
 
 **Source:** session 2026-06-04 (MAR-1975 otomoto URL fix — exported 33k docs, 86MB file).
+
+---
+
+## synthetic-seed-testing
+
+**When to use** — data-fix endpoints that are too complex to test with a single real vehicle: need multiple edge cases (no clean URL, merge, deactivated, price delta). Faster than the export-import workflow, no prod access needed.
+
+**Core pattern:**
+- Write a `tmp/seed-tests.mjs` script (ES module, direct AWS SDK + ES client calls).
+- Use a **fictional narrow date range** in the far future (e.g. `2025-07-01T10:00:00Z`). No real vehicles ever have `activeFrom` in this window → the data-fix endpoint only processes your test seeds. No need to wipe the DB.
+- Step 1 of seed script: `deleteByQuery` all records for the target site in ES (removes stale previous test runs).
+- ES Data index has **strict mapping** — only whitelisted fields accepted. Fetch the actual whitelist once: `curl http://elasticsearch8.devenv:9200/market-study-vehicle-data_rollover/_mapping` and build a `Set` of top-level field names. Use a `stripS3Fields` function before indexing.
+- S3 key format: `md5(url).replace(/((.)(.)(.).*)/, '$2/$3/$4/$1')` — path-prefixed hash. Use this for both reads and writes in the seed script.
+- Seed script prints expected counters at the end (wellDoneCount, noDataWithFixedUrlCount, alreadyOkVehiclesCount) so the tester knows what to verify.
+
+**Test case checklist for URL-migration fixes** (MAR-1975 pattern — 6 cases covering all branches):
+1. Old URL only, no clean URL, vehicle active → `noDataWithFixedUrl+1`, `activeTo: null`
+2. Old URL only, no clean URL, vehicle active (duplicate of case 1 for confidence)
+3. Old URL + active clean URL → `alreadyOkVehicles+1`, `activeTo: null`
+4. Old URL + active clean URL, price delta → `alreadyOkVehicles+1`, history delta in merged S3 doc
+5. Old URL active + clean URL **deactivated** (`activeTo` set) → `alreadyOkVehicles+1`, `activeTo` must be preserved (NOT null)
+6. Old URL only, old URL itself **deactivated** (`activeTo` set), no clean URL → `noDataWithFixedUrl+1`, `activeTo` must be preserved on the new clean URL S3 record
+
+**Verify with a separate `tmp/verify-*.mjs`** — spot-check key fields (price, activeTo, activeFrom, history delta) in S3 and ES after running the fix endpoint.
+
+**Source:** session 2026-06-08 (MAR-1975 — complete test suite with 6 edge cases).

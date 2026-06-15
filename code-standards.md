@@ -55,23 +55,33 @@ Whenever ams-save runs, it adds findings from the conversation into part 2.
 
 Each entry: rule + example + source. No prose.
 
-### Logger call — multi-line structured object, context last
+### Logger call — opening brace on same line, each field on its own line
 
 ```typescript
-this.logger.error(
-    {
-        message: 'Short description',
-        site,
-        error: ex.message,
-    },
-    ex.stack,                   // only for .error()
-    LoggingContexts.ACTIVE_VEHICLES,
-);
+// .log() / .warn() — object then context on same closing line
+this.logger.warn({
+    message: 'Short description',
+    site,
+    vehicleUrl: vehicle.url,
+}, LoggingContexts.DATA_FIX);
+
+// .error() — object then stack + context on same closing line
+this.logger.error({
+    message: 'Short description',
+    site,
+    errorMessage: ex.message,
+}, ex.stack, LoggingContexts.DATA_FIX);
 ```
 
-First arg always a structured object, `message` first key. No inline single-line form. `.log()` / `.warn()`: second arg is the context. `.error()`: second arg is stack, third is context. Closing `);` on its own line.
+Rules:
+- Opening `{` on the same line as the logger call — never `this.logger.error(\n    {`
+- Each field on its own line inside the object
+- Closing `},` followed by remaining args on the same line
+- `message` is always the first key
+- `.error()` second arg is stack, third is context; `.log()` / `.warn()` second arg is context
+- Never compress all fields into a single inline object: `{ message: '...', site, errorMessage: ex.message }` on one line is wrong
 
-**Source:** session 2026-05-20.
+**Source:** session 2026-05-20, corrected format 2026-06-08.
 
 ### Logging context — most specific enum
 
@@ -671,3 +681,17 @@ await this.crawlerMessagesRoutingService.saveVehiclesToDataIndex(vehicles);
 ```
 
 **Source:** session 2026-06-04 (MAR-1975 update-vehicle-urls service).
+
+### No em dashes in code comments — use plain hyphens
+
+Use `-` in inline comments and docblocks. Em dashes (`—`) are not standard code style and stand out as AI-generated.
+
+```typescript
+// BAD
+// recalculate deletes activeTo from inputs — restore original if needed
+
+// GOOD
+// recalculate deletes activeTo from inputs - restore original if needed
+```
+
+**Source:** session 2026-06-08 (MAR-1975 — user rejected em dashes as "sign of claude work").

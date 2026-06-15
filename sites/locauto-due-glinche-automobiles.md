@@ -1,9 +1,11 @@
 # locauto-due / glinche-automobiles
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+✅ **2026-06-04 RESOLVED** — API next-page link changed; fix deployed and crawler rerun. All vehicles recovered.
 
 ## History & quirks (newest first where known)
+- **2026-06-04** — API response changed: next-page link format updated. Fix deployed and crawler rerun → all vehicles recovered ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780304827309509)
+- **2026-05-31** — 0 vehicles on Saturday (self-recovered by next crawl). Noted in weekly thread as transient. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780304827309509)
 - Intermittent DL messages.
 
 ## Related patterns

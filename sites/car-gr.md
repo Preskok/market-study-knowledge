@@ -1,7 +1,7 @@
 # car-gr (GR)
 
 ## Current status
-🟢 **2026-05-09 OK** — Flow test passed with VPN/ScrapeDo access. 2 Mercedes-Benz CLS 53 AMG vehicles saved. `IsListingValidatedVehicle: false` (no pre-existing S3 state — first local crawl). matchingDay=5 needed for Saturday testing. Requires VPN to reach ScrapeDo.
+🔴 **2026-06-02 OPEN** — 502 on all retries for main listing URL. Low priority. ScrapeDo 25cr requests work; 10cr and 1cr fail. with VPN/ScrapeDo access. 2 Mercedes-Benz CLS 53 AMG vehicles saved. `IsListingValidatedVehicle: false` (no pre-existing S3 state — first local crawl). matchingDay=5 needed for Saturday testing. Requires VPN to reach ScrapeDo.
 
 ## Test brand+model
 - brand: Mercedes-Benz
@@ -10,6 +10,7 @@
 - notes: First alphabetically on car-gr's Greek interface. Strategy A (break-on-first-push) works. matchingDay must be changed to day-of-week offset for today (5 = Saturday 2026-05-09). ScrapeDo required — fails without VPN. SVL check always fails on first local crawl (LocalStack S3 deserialization on NoSuchKey); vehicles fall back to VEHICLE type path with skipVisitingDetail=true, bypassing parseVehicleInput. Weekly queue must be clear before test or car-gr VEHICLE messages get buried.
 
 ## History & quirks (newest first where known)
+- **2026-06-02** — 502 on all retries for `car.gr/classifieds/cars/search/?category=15001`. Not a priority site. ScrapeDo 25cr requests work as workaround. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780304827309509)
 - **2026-05-14** — `getNextPageUrl()` fix still pending. Matea opened ticket from Filip's post from the prior week. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1778485086288569)
 - **2026-05-09** — Flow test passed (VPN required): getBrandsAndModels ✅, 2 Mercedes-Benz CLS 53 AMG ✅, equipment N/A (listings-only), dealers N/A (parseDealer not overridden). `IsListingValidatedVehicle: false` (first local crawl — no pre-existing S3). LocalStack S3 deserialization error on NoSuchKey causes all SVL checks to fail; vehicles re-routed as VEHICLE type with skipVisitingDetail=true (expected fallback). Purged weekly queue mid-test to unblock VEHICLE messages from backlog left by earlier unmodded run. matchingDay changed from 1→5 for Saturday test.
 - **2026-05-09** — Flow test blocked (initial attempt): ScrapeDo API unreachable from local (connection refused on `api.scrape.do`). getBrandsAndModels → ❌. Reverted Strategy A + matchingDay mods. Fixed by enabling VPN.

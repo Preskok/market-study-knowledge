@@ -1,7 +1,7 @@
 # pazar3 (MK)
 
 ## Current status
-🟡 **2026-05-09 FLOW OK, DATA BUGS OPEN** — Flow test passed (83 VW Golf rows, 19 raw-dealers). Known data bugs: `getNextPageUrl()` broken (50 vehicles max), `/wanted/` URL indexing bug, `mileage 0` data corruption. Matea working on combined fix PR. MAR-2098 open.
+✅ **2026-06-05 DATA FIXED** — isUsed bug fixed (was falsely marking ~80% of vehicles as new). Data corrected for all active vehicles. Prior bugs (getNextPageUrl, wanted URLs, mileage 0) addressed in general bugfixes 2026 ticket. Slight drop on 2026-06-01 was self-recovered.
 
 ## Test brand+model
 - brand: Volkswagen
@@ -10,6 +10,9 @@
 - notes: substring-match needed (`brandName.toLowerCase().includes('volkswagen')`) — site formats brand as "vw volkswagen". Strategy A (break inside loops) is required — Strategy B took 49 min on this site due to ~30 brand × N model walk via browser+proxy. Run yielded 3,621 VW Golf rows; 0 DealerId on any (worth investigating); Equipment field present but all sub-arrays empty.
 
 ## History & quirks (newest first where known)
+- **2026-06-05** — `isUsed` data successfully fixed for all active vehicles via forced SVL fails ✅. [Slack](https://preskok.slack.com/archives/C04K2LP3AG0/p1780411491966659)
+- **2026-06-02** — isUsed bug discovered (MAR-2098 context): `isUsed = false` set for all vehicles without explicit "used" condition — even those with no condition info. ~80% of pazar3 vehicles falsely marked as new since crawler was implemented. Fix prepared (force SVL fails to trigger detail re-visits). Deployed and confirmed resolved by 2026-06-05. [Slack](https://preskok.slack.com/archives/C04K2LP3AG0/p1780411491966659)
+- **2026-06-01** — Slight drop the previous day, all vehicles recovered ✅.
 - **2026-05-11** — Slight drop in numbers: 103k→91k. Self-recovered by next day; pattern is known (see quirks below). [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1778485086288569)
 - **Friday peak in Data index (unconfirmed hypothesis)** — On Saturday only ~57k vehicles were crawled (normal ~90k). ~47k were subsequently deactivated with `createdAt = lastVisit = Friday` (standard deactivation pipeline behaviour — `createdAt` is overwritten to the last-seen date). On Sunday those vehicles were reactivated (crawler found them again) — `activeTo` was removed but `createdAt` was NOT updated, so the Data index still shows a spike attributed to Friday. No code fix needed — this is a transient partial-crawl artefact, not a persistent bug. See `ams deactivation-pipeline` for the `createdAt = lastVisit` mechanism. Not confirmed in code.
 - **2026-05-09** — Flow test passed: getBrandsAndModels ✅ (brand filter needed: "vw volkswagen"), 83 VW Golf rows in ES ✅, 19 raw-dealers ✅ (parseDealer working), equipment=0 (VW Golf sample has no equipment data). `IsListingValidatedVehicle: false` (first local crawl — no S3). POLAND queue had 9402 pre-existing messages (unrelated backlog). Pipeline slow — browser detail fetches take ~10 min for one listing page.

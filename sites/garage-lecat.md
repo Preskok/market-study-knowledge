@@ -1,9 +1,10 @@
 # garage-lecat
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+🟡 **2026-06-05 WATCH** — Persistent ~5% gap below site count. Site has 327, we crawled 312. Monitoring.
 
 ## History & quirks (newest first where known)
+- **2026-06-01→06-05** — Persistent ~5% gap: site 332→327 vehicles, we crawled 315→312. Gap consistent over multiple days. Matea monitoring until next check. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780304827309509)
 - 9 vehicles one day (self-recovers).
 
 ## Related patterns

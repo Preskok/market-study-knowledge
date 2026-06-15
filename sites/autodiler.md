@@ -1,9 +1,10 @@
 # autodiler (ME?)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+✅ **2026-06-04 RESOLVED** — Site was down (Cloudflare unable to connect to host). Local run worked; Matea reran on prod → all vehicles recovered ✅.
 
 ## History & quirks (newest first where known)
+- **2026-06-04** — Website down (Cloudflare unable to connect to host). Crawler prepared 0 vehicles. Matea ran locally — worked fine. Reran on prod → all vehicles recovered ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780304827309509)
 - Crawls commercial vehicles (kombi vozila) — ~950/day.
 - 500 responses = ad no longer exists → must go through `isResponseNotFound()` (also verify body-text indicator) to avoid wasted retries.
 - Added value `Metan` to fuel-type regex mappings.

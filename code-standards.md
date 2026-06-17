@@ -832,3 +832,51 @@ const afterState = html?.split('window.__INITIAL_STATE__ = ')[1];
 ```
 
 **Source:** session 2026-06-16 (MAR-2067 mobile.de `fetchMakes()`).
+
+### Project formatter / lint config (the values Prettier + ESLint enforce)
+
+4-space indent, 240-char lines, single quotes, trailing commas always. Plus rules not all auto-fixable: **no default exports**, **no `// @ts-ignore`** (fix the type), **no async logic in constructors** (DI only — use lifecycle hooks for async setup), async arrow has a space before `=>` (named/anonymous functions don't). Path aliases only (see "Imports — path aliases only").
+
+**Source:** session 2026-06-17 (moved from CLAUDE.md).
+
+### Linting — only changed files, never the whole repo
+
+`npm run lint` runs `prettier + eslint --fix` across the **entire** codebase (400+ files) and produces massive unrelated diffs. Never run it. Lint only files you actually touched; always lint new files before their first commit.
+
+```bash
+npx prettier --write src/path/to/file.ts
+npx eslint src/path/to/file.ts --fix
+npx tsc --noEmit   # type-check without writes
+```
+
+**Source:** session 2026-06-17 (moved from CLAUDE.md).
+
+### Don't mask errors with truthy defaults
+
+Returning `[]` from `getBrandsAndModels()` on error makes the alert system think the site is legitimately empty. Throw and let the retry loop / DL handle it. (Matea's rule.) See also "Re-throw exceptions that should be retried by the scheduler".
+
+```typescript
+// BAD - swallows a real failure as "no vehicles"
+catch (ex) { return []; }
+// GOOD - let it propagate
+catch (ex) { throw ex; }
+```
+
+**Source:** session 2026-06-17 (moved from CLAUDE.md).
+
+### Defensive fetch — coalesce to empty string before cheerio
+
+`cheerio.load()` throws on `undefined`. Coalesce the fetch result so the parser degrades gracefully instead of crashing.
+
+```typescript
+const html = await this.fetchRequest(url) ?? '';
+const $ = cheerio.load(html);
+```
+
+**Source:** session 2026-06-17 (moved from CLAUDE.md).
+
+### Tests — co-located specs, shared mock providers
+
+Unit tests are `**/*.spec.ts` co-located with source. Use `TestUtils.mockProviders([...])` from `test/test.utils.ts` — never roll your own mock providers. E2E tests are `test/*.e2e-spec.ts` with a 60s Jest timeout.
+
+**Source:** session 2026-06-17 (moved from CLAUDE.md).

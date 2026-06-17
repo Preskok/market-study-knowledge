@@ -281,7 +281,24 @@ These are services; actual block behavior per-site often depends on specific sec
 
 ## APPLICATION_MODE env
 
-Run only a subset of AMS locally/dev by setting `APPLICATION_MODE=SEARCH_API` (or `CRAWLER`, etc.). Saves time and CPU when you only need part of the system.
+`APPLICATION_MODE` selects which NestJS modules load. Wiring in `src/app.module.ts` and `src/main.ts:44`. Run only a subset locally/dev to save time and CPU when you only need part of the system.
+
+| Mode | Port | Purpose |
+|------|------|---------|
+| _(unset)_ | 3000 | Full local dev (crawler + bulk-saver in one process) |
+| `WORKER` | 3000 | Crawler + RMQ consumers + tasks (no bulk-saver) |
+| `SEARCH_API` | 4000 | Read-only search endpoints |
+| `BULK_SAVER` | 3001 | Bulk persistence to ES + S3 |
+
+RMQ channels open per mode in `src/queue/rmq/rmq.module.ts:42` — consumers not matching the mode are skipped. For local end-to-end crawl testing leave the mode **unset** (WORKER skips the bulk-saver, so vehicles never reach ES).
+
+---
+
+## Crawler error handling — three tiers
+
+1. **Retry** (request-level transient errors) — inside the `fetchRequest` retry loop in `src/crawler/CrawlerAbstract.ts:368`. Override `isResponseRateLimited`/`isResponseForbidden`/`isServerError` to participate. Errors thrown from these classifiers ESCAPE the loop — usually not what you want.
+2. **Skip and continue** (vehicle-level non-retryable: 404, 410, missing field) — `return` from the parser, log via `LoggingContexts.PARSER_DEBUGGING`, never throw.
+3. **Throw to RMQ DL** (process-level — system genuinely broken) — `HttpRequestFailedError` after retries exhausted, or any unhandled error in the consumer. RMQ NACKs with requeue=false on second attempt → dead letter.
 
 ---
 

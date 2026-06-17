@@ -294,6 +294,21 @@ RMQ channels open per mode in `src/queue/rmq/rmq.module.ts:42` — consumers not
 
 ---
 
+## Crawler implementation
+
+Each concrete crawler is decorated `@CrawlerAlias(SiteKeysEnum.X)` ([crawler.decorator.ts:17](src/crawler/crawler.decorator.ts:17)). The decorator injects `site`, `baseUrl`, `domain`, `routingKey`, `detailRoutingKey`, `shouldValidateListingVehicle`, `shouldRevisitYesterdaysVehicles`, `isDisabled`, `skipDetailsUrlValidation` from the per-site entry in [CrawlingSites.ts](src/shared/const/CrawlingSites.ts).
+
+**Methods to override on a concrete crawler:**
+- `getBrandsAndModels()` - listingUrls to publish (always required)
+- `parseVehicleInput(params)` - single ad -> `AdVehicle` (always required)
+- HTML only: `getVehicleListPageResponse()`, `getNextPageUrl()`, `beforeParseVehicle()`
+- Anti-bot: override `isResponseForbidden`, `isResponseNotFound`, `isResponseRateLimited`, `isServerError` (these run inside the retry loop - thrown errors escape!)
+- URL changes: `fetchRequest()` override + `getFetchRequestOptionsForDetailsUrlValidation()` for redirect-sensitive detail validation
+
+For a deep dive, read [VehicleAdCrawlerAbstract.ts:35](src/crawler/sites/VehicleAdCrawlerAbstract.ts:35) and [HtmlAdVehicleCrawlerAbstract.ts:32](src/crawler/sites/HtmlAdVehicleCrawlerAbstract.ts:32).
+
+---
+
 ## Crawler error handling — three tiers
 
 1. **Retry** (request-level transient errors) — inside the `fetchRequest` retry loop in `src/crawler/CrawlerAbstract.ts:368`. Override `isResponseRateLimited`/`isResponseForbidden`/`isServerError` to participate. Errors thrown from these classifiers ESCAPE the loop — usually not what you want.

@@ -1,10 +1,10 @@
 # JS / TS Code Standards
 
 Two-part doc:
-1. **General standards** (Confluence baseline — short summary, link to source for the long version)
-2. **Project-specific patterns** (harvested from sessions — what the user has corrected or reinforced)
+1. **Part 1 — General JS/TS baseline** (Confluence baseline). Most is Prettier/ESLint-enforced; key project values: 4-space indent, 240-char lines, single quotes, trailing commas, explicit return types, no `any`, `===` only, no default exports, no `// @ts-ignore`, no async logic in constructors, path aliases only (never `../../..`).
+2. **Part 2 — Project-specific patterns** (harvested from sessions): logger structure, error-handling tiers, DTO validators, Cheerio selectors, naming, control flow, tests, and more.
 
-Whenever ams-save runs, it adds findings from the conversation into part 2.
+**Re-check Part 2 before committing changed files.** Run `ams-save` at end of session to harvest new findings. Crawler error-handling tiers and the retry-loop model live in [foundational.md](~/Projects/market-study-knowledge/foundational.md).
 
 ---
 

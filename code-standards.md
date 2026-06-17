@@ -247,6 +247,22 @@ const updatedPreventedSites: DeactivationPreventedSites = { ...deactivatedSites 
 
 **Source:** session 2026-05-20.
 
+### Crawler-prefix rule for interfaces in site interface files
+
+Exported interfaces use the crawler name as prefix. Non-exported (file-private) interfaces used only within the same interface file do NOT get the crawler prefix.
+
+```typescript
+// BAD - non-exported sub-interfaces carry the crawler prefix
+export interface MobileInitialState { shared?: MobileInitialStateShared; }
+interface MobileInitialStateShared { referenceData?: MobileInitialStateReferenceData; }
+
+// GOOD
+export interface MobileInitialState { shared?: InitialStateShared; }
+interface InitialStateShared { referenceData?: InitialStateReferenceData; }
+```
+
+**Source:** session 2026-06-17 (MAR-2067 mobile.de).
+
 ### Extract repeated inline object types to named interfaces
 
 When `Array<{ site: string; ratio: number }>` appears on two or more signatures, extract to the domain interface file (e.g. `DeactivationPreventedSite.interface.ts`).
@@ -537,6 +553,8 @@ errorMessage: preventedSites[site].reason,
 
 `.gitignore` entries for personal tooling (IDE files, Claude state, local knowledge base) should be handled via IDE's own ignore settings — not committed to the repo. Similarly, `.http` test requests for endpoints that are dangerous to call manually (e.g. `check-and-prevent-deactivation`) should not be in committed `.http` files.
 
+A `pre-push` hook in `.git/hooks/pre-push` automatically reverts all `*.http` files to their `develop` state before pushing, so local test modifications are never pushed. Commits to `.http` files are allowed (intentional changes go through normally); the hook only fires if the branch tip differs from `develop`.
+
 **Source:** session 2026-06-03 (mlencek PR #21).
 
 ### Prefer CrawlingSites config over MySQL for site configuration
@@ -694,4 +712,123 @@ Use `-` in inline comments and docblocks. Em dashes (`—`) are not standard cod
 // recalculate deletes activeTo from inputs - restore original if needed
 ```
 
-**Source:** session 2026-06-08 (MAR-1975 — user rejected em dashes as "sign of claude work").
+**Source:** session 2026-06-08 (MAR-1975 - user rejected em dashes as "sign of claude work").
+
+### Cheerio — CSS attribute selector over JS `.filter()` callback
+
+Use a CSS attribute selector directly instead of `.filter((_, el) => ...)` when filtering by a known attribute value. Cheerio handles it natively and it avoids O(M×N) JS-level iteration.
+
+```typescript
+// BAD
+const modelOptions = loadedHtml('option').filter((_, el) => loadedHtml(el).attr('data-brand-id') === brandId);
+
+// GOOD
+const modelOptions = loadedHtml(`option[data-brand-id="${brandId}"]`);
+```
+
+Only safe when the interpolated value is guaranteed numeric/non-injectable (e.g. from a page's `option[value]` attribute). If the value comes from user input or an untrusted source, use `.filter()` instead.
+
+**Source:** session 2026-06-15 (MAR-2101 - PR reviewer comment, applied to autobazar getBrandsAndModels).
+
+### Cheerio — filter empty values at selector level, not with a `continue` guard
+
+Exclude empty-value elements directly in the CSS selector using `[value]:not([value=""])` rather than selecting all then skipping inside the loop. Mirrors how brand selectors already use `option:not([value=""])`.
+
+```typescript
+// BAD
+const models = loaded('input[name*="[model][]"]').toArray();
+for (const model of models) {
+    const modelName = loaded(model).attr('value');
+    if (!modelName) continue; // guard after the fact
+    // ...
+}
+
+// GOOD
+const models = loaded('input[name*="[model][]"][value]:not([value=""])').toArray();
+for (const model of models) {
+    const modelName = loaded(model).attr('value') as string; // guaranteed non-empty by selector
+    // ...
+}
+```
+
+**Source:** session 2026-06-16 (MAR-2039 brueggemann — Gemini code assist suggestion, accepted by user).
+
+### Cheerio — `[name*="segment"]` contains selector for dynamic form IDs
+
+When a site's `name` attribute includes a dynamic segment (e.g. `search[_cs-fs-form-4704][make][]`), use the CSS attribute contains operator `*=` rather than an exact match. Exact match silently returns 0 elements if the form ID changes.
+
+```typescript
+// BAD — breaks when form ID is dynamic
+const brands = loaded('select[name="search[make][]"] option:not([value=""])').toArray();
+
+// GOOD — survives form ID rotation
+const brands = loaded('select[name*="[make][]"] option:not([value=""])').toArray();
+const models = loaded('input[name*="[model][]"][value]:not([value=""])').toArray();
+```
+
+**Source:** session 2026-06-16 (MAR-2039 brueggemann — brand/model selector stopped matching after site added dynamic form ID prefix).
+
+### OtherBrandValues / OtherModelValues — register in constants, let abstract handle it
+
+When a site has "other brand" / "other model" catch-all options, register them in `AdCrawlingSitesOtherBrandValues` / `AdCrawlingSitesOtherModelValues` in `OtherBrandAndModelsValues.ts`. Do NOT add `CrawlerHelper.isModelUnknown()` / `isBrandUnknown()` guards inside `getBrandsAndModels()` — the abstract handles those downstream automatically.
+
+```typescript
+// BAD - manual guard inside getBrandsAndModels
+if (CrawlerHelper.isModelUnknown(modelName, this.site)) {
+    continue;
+}
+
+// GOOD - just register in the constants file
+export const AdCrawlingSitesOtherModelValues = {
+    autobazar: ['iný model'],
+    // ...
+};
+```
+
+**Source:** session 2026-06-15 (MAR-2101 - user correction).
+
+### JSON.parse — always guard against null literal
+
+`JSON.parse("null")` returns JS `null` (valid JSON). Any downstream call like `Object.values()` or `.forEach()` on the result will throw. Add `?? {}` or `?? []` after every `JSON.parse` where the source string might be the literal `"null"`.
+
+```typescript
+// BAD
+const equipmentObj: Record<string, Foo> = JSON.parse(equipmentJson);
+Object.values(equipmentObj).forEach(...); // throws if equipmentJson === "null"
+
+// GOOD
+const equipmentObj: Record<string, Foo> = JSON.parse(equipmentJson) ?? {};
+Object.values(equipmentObj).forEach(...); // safe
+```
+
+**Source:** session 2026-06-16 (MAR-2016 auto-ici — ng-init lines[2] is `"null"` when vehicle has no serial equipment).
+
+### Split on `\n` to extract single-line JSON embedded in HTML
+
+When extracting a `window.__INITIAL_STATE__ = ...` (or similar) assignment from HTML, split on `\n` and take index `[0]`. `JSON.stringify` always produces a single line — the first newline is always the correct end-of-JSON boundary. Do NOT rely on `;\n`, `</script>`, or `;` as delimiters; modern SSR pages regularly omit semicolons between variable declarations.
+
+```typescript
+// BAD — fails if no semicolons between window.* declarations (mobile.de)
+const jsonStr = html?.split('window.__INITIAL_STATE__ = ')[1]?.split(/;\r?\n/)[0];
+
+// GOOD — JSON.stringify output is always single-line; first \n is the boundary
+const jsonStr = html?.split('window.__INITIAL_STATE__ = ')[1]?.split('\n')[0]?.trimEnd();
+```
+
+**Source:** session 2026-06-16 (MAR-2067 mobile.de — homepage HTML uses `\n` with no semicolons between `window.__INITIAL_STATE__` and `window.__PUBLIC_CONFIG__`).
+
+### `errorInsteadOfContinue: false` means `fetchRequest` returns `undefined`, not throws
+
+When `fetchRequestOptions` has `errorInsteadOfContinue: false`, a failed HTTP request returns `undefined` instead of throwing. `.catch(() => null)` chained on such a call is dead code — the promise never rejects.
+
+```typescript
+// BAD — .catch is dead code; fetchRequest with errorInsteadOfContinue: false never rejects
+const html = await this.fetchRequest(url, this.fetchRequestOptions).catch(() => null);
+
+// GOOD
+const html = await this.fetchRequest(url, this.fetchRequestOptions);
+// html is undefined on failure; handle with optional chaining downstream
+const afterState = html?.split('window.__INITIAL_STATE__ = ')[1];
+```
+
+**Source:** session 2026-06-16 (MAR-2067 mobile.de `fetchMakes()`).

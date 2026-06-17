@@ -24,7 +24,7 @@ CLAUDE.md is checked into version control. Never put tokens, passwords, API keys
 
 ## Site file authoring conventions
 
-Site files live in `references/sites/<slug>.md`. Follow these rules when writing or editing them:
+Site files live in `~/Projects/market-study-knowledge/sites/<slug>.md`. Follow these rules when writing or editing them:
 
 **History entries — newest first, dated, incident-style:**
 ```
@@ -40,7 +40,7 @@ Site files live in `references/sites/<slug>.md`. Follow these rules when writing
 - `⛔ Disabled — [reason]`
 - `_Unknown — check Slack._` (when you genuinely don't know)
 
-**Update `_index.md`** when status changes for a site. The index is the fast-triage entry point for `crawler-debug`.
+**Update `~/Projects/market-study-knowledge/sites/_index.md`** when status changes for a site. The index is the fast-triage entry point for `crawler-debug`.
 
 ## Signs this file needs a trim
 

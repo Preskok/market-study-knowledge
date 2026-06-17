@@ -1,7 +1,7 @@
 # car-gr (GR)
 
 ## Current status
-🔴 **2026-06-02 OPEN** — 502 on all retries for main listing URL. Low priority. ScrapeDo 25cr requests work; 10cr and 1cr fail. with VPN/ScrapeDo access. 2 Mercedes-Benz CLS 53 AMG vehicles saved. `IsListingValidatedVehicle: false` (no pre-existing S3 state — first local crawl). matchingDay=5 needed for Saturday testing. Requires VPN to reach ScrapeDo.
+🔴 **2026-06-08 OPEN** — 502 still on all retries. Even ScrapeDo 25cr mostly not working now (was a workaround before). No fix deployed; low priority. Grooming discussion pending.
 
 ## Test brand+model
 - brand: Mercedes-Benz

@@ -1,9 +1,10 @@
 # jugand-autos
 
 ## Current status
-🟡 **2026-06-08 WATCH** — 586/1060 vehicles due to proxy ECONNRESET errors. Monitoring next crawl.
+✅ **2026-06-09 RESOLVED** — All vehicles crawled the following day. ECONNRESET was transient proxy issue, self-resolved.
 
 ## History & quirks (newest first where known)
+- **2026-06-09** — All vehicles crawled; ECONNRESET proxy issue self-resolved. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - **2026-06-08** — 586/1060 vehicles prepared. Root cause: ECONNRESET with proxies on listing requests. Monitoring next crawl. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - Full site 404/500 outage 2+ days (external).
 - Intermittent "Prepared 0 listingUrl" — 6/7/8 AM rerun fixes.

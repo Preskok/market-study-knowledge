@@ -861,6 +861,7 @@ if (process.env.APPLICATION_MODE && process.env.APPLICATION_MODE !== application
 - `fix-s3-url-sid` — strips session IDs from S3 URLs, dedups (MAR-851)
 - `fix-s3-history` — rebuilds S3 history for given URLs
 - `update-vehicle-urls` — migrates old URLs to clean URLs in S3 + Data ES; merges histories if clean URL record already exists (MAR-1975). Service: `src/data-fix/remove-sid-from-s3-fix/update-vehicle-urls.service.ts`.
+- `delete-wrong-url-vehicles` — deletes vehicles with wrong URLs from S3 + Data ES (MAR-1976, car-gr + auto-zeilinger). Supports `dryRun: true` preview mode.
 
 **`src/data-restore/data-restore.controller.ts`**:
 - `import-from-old-es-to-s3` — migrate vehicle data from legacy ES → S3, async tasks queued
@@ -873,7 +874,7 @@ if (process.env.APPLICATION_MODE && process.env.APPLICATION_MODE !== application
 - `recalculate` returns `[]` when data is identical even if URLs differ (e.g. only `url` field changed). Force-write fallback: call `writeVehicleToS3` directly and push result into the array so the old URL record still gets deleted.
 - `skippedUnsafeToRebuildCount` — `cleanUrl()` returns `null` when it cannot safely rebuild (e.g. Otomoto slug mismatch between rawModel and URL). Safe to ignore; these vehicles keep their old URL.
 
-**Source:** session 2026-06-08 (MAR-1975 — otomoto URL fix, 5+1 test cases).
+**Source:** session 2026-06-08 (MAR-1975 — otomoto URL fix); extended 2026-06-16 (9-case test suite, history-interleave paths).
 
 ---
 
@@ -1171,14 +1172,50 @@ When investigating `"Listing vehicle check failed in prop"` logs (`context:LISTI
 - S3 key format: `md5(url).replace(/((.)(.)(.).*)/, '$2/$3/$4/$1')` — path-prefixed hash. Use this for both reads and writes in the seed script.
 - Seed script prints expected counters at the end (wellDoneCount, noDataWithFixedUrlCount, alreadyOkVehiclesCount) so the tester knows what to verify.
 
-**Test case checklist for URL-migration fixes** (MAR-1975 pattern — 6 cases covering all branches):
+**Test case checklist for URL-migration fixes** (MAR-1975 pattern — 9 cases covering all branches):
 1. Old URL only, no clean URL, vehicle active → `noDataWithFixedUrl+1`, `activeTo: null`
-2. Old URL only, no clean URL, vehicle active (duplicate of case 1 for confidence)
+2. Old URL only, no clean URL, vehicle active (duplicate for confidence)
 3. Old URL + active clean URL → `alreadyOkVehicles+1`, `activeTo: null`
 4. Old URL + active clean URL, price delta → `alreadyOkVehicles+1`, history delta in merged S3 doc
 5. Old URL active + clean URL **deactivated** (`activeTo` set) → `alreadyOkVehicles+1`, `activeTo` must be preserved (NOT null)
 6. Old URL only, old URL itself **deactivated** (`activeTo` set), no clean URL → `noDataWithFixedUrl+1`, `activeTo` must be preserved on the new clean URL S3 record
+7. **History interleave A** — old URL has internal history (T1→T3 with price change), clean URL is a single snapshot at T2 in the middle (T1<T2<T3) → `unpatchAndRecalculate` path, merged `history.length=2`, `activeFrom=T1`, price=newest (T3)
+8. **History interleave B** — both records have internal history, fully interleaved (T1_old < T2_clean < T3_old < T4_clean) → `unpatchAndRecalculate`, `history.length=3`, `activeFrom=T1`, price=T4
+9. **History interleave C / quick path** — clean URL is the oldest record AND has history (T1→T2), old URL is the newest single snapshot (T3) → triggers **quick path** (`vehiclesWithHistory.length===1` and record-with-history is oldest), `history.length=2`, `activeFrom=T1`, price=T3
+
+**recalculateHistoryOfVehicle path rules** (critical for designing seed cases):
+- **Quick path** — fires when `vehiclesWithHistory.length === 1` AND the record with history is the oldest (no record-without-history has an older `createdAt`). Prepends the existing history array and recalculates only from current state forward.
+- **Full path (unpatchAndRecalculate)** — fires when `vehiclesWithHistory.length >= 2`. Calls `completeVehicle` on each record to explode history deltas into individual snapshots, then `fullHistoryRecalculation` sorts ALL snapshots by `createdAt` oldest-first and rebuilds from scratch.
+- `activeFrom` always = oldest `createdAt` across all merged snapshots. URL direction is irrelevant — purely timestamp-based.
+
+**Seeding S3 records with pre-existing history** (for cases 7-9):
+Use a `scalarDelta` helper and a `stripForHistory` helper to compute jsondiffpatch-format deltas without importing jsondiffpatch:
+```javascript
+// mirrors getVehicleForHistoryCalculation (strips fields excluded from diffing)
+const stripForHistory = ({ history, activeFrom, activeTo, id, mappedValues, mlConfidence, ...rest }) => rest;
+
+// jsondiffpatch scalar delta: { field: [oldVal, newVal] } for each changed field
+const scalarDelta = (oldState, newState) => {
+    const delta = {};
+    const allKeys = new Set([...Object.keys(oldState), ...Object.keys(newState)]);
+    for (const k of allKeys) {
+        const a = oldState[k], b = newState[k];
+        if (JSON.stringify(a) !== JSON.stringify(b)) {
+            if (!(k in oldState)) delta[k] = [b];
+            else if (!(k in newState)) delta[k] = [a, 0, 0];
+            else delta[k] = [a, b];
+        }
+    }
+    return delta;
+};
+
+// Example: build an S3 record whose history says price went from P1 to P2 between T1 and T3
+const t1State = stripForHistory({ ...base, url: oldUrl, price: P1, createdAt: T1 });
+const t3State = stripForHistory({ ...base, url: oldUrl, price: P2, createdAt: T3 });
+const record = { ...base, url: oldUrl, price: P2, createdAt: T3, activeFrom: T1, history: [scalarDelta(t1State, t3State)] };
+```
+Good only for simple scalar fields (price, createdAt). Works because ISO date strings are <50 chars so jsondiffpatch uses the simple `[old, new]` format (no LCS text diff).
 
 **Verify with a separate `tmp/verify-*.mjs`** — spot-check key fields (price, activeTo, activeFrom, history delta) in S3 and ES after running the fix endpoint.
 
-**Source:** session 2026-06-08 (MAR-1975 — complete test suite with 6 edge cases).
+**Source:** session 2026-06-08 (MAR-1975 — 6 edge cases); extended 2026-06-16 (cases 7-9, history interleaving + scalarDelta helper).

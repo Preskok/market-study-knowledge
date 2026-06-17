@@ -1,9 +1,10 @@
 # hasznalt-auto (HU)
 
 ## Current status
-🟡 **2026-06-08 WATCH** — ScrapeDo returning many 502 errors; 67k/119k vehicles on 2026-06-07 (42% deactivation threshold triggered). Vehicles locked from deactivation on Saturday. Monitoring next crawl.
+✅ **2026-06-09 RESOLVED** — All vehicles crawled the following day. Deactivation lock removed. ScrapeDo 502 was transient weakness, self-resolved.
 
 ## History & quirks (newest first where known)
+- **2026-06-09** — All vehicles crawled; deactivation lock removed. ScrapeDo 502s were transient. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - **2026-06-07/08** — ScrapeDo less successful than usual; many 502 errors on listing pages. Got 67k/119k vehicles (42% would deactivate, threshold 30%). Vehicles locked from deactivation on Saturday. Likely a temporary ScrapeDo weakness. Monitoring next crawl. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - **2026-05-14** — "Empty sub-selector" errors from ScrapeDo sending brotli-compressed responses without decompressing (sent `Content-Encoding: br` header but raw compressed bytes). Not the same cross-user contamination pattern as autoscout-ch — specific to brotli handling. Monitoring. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1778485086288569)
 - Scrape.do allowlisted (1-credit works).

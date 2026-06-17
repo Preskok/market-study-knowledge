@@ -1,9 +1,11 @@
 # finn (NO)
 
 ## Current status
-_Needs manual triage — see history below and update this line when you know the current state._
+✅ **2026-06-12 RESOLVED** — Name SVL fix deployed; all vehicles indexing correctly. Series/Class-to-model oscillation calmed (only ~hundreds vs prior thousands per day) and did not reoccur in last 3 days.
 
 ## History & quirks (newest first where known)
+- **2026-06-12** — Name SVL fix confirmed working; classes/models oscillation did not reoccur in last 3 days. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
+- **2026-06-09/12** — Name SVL fix deployed: listings do not include brand+model in name; details do - causing SVL fails. Fix adds brand+model to listing name. Regarding *Series/*Class models: ~6k vehicles changed to specific models; thousands changed back to classes day-after, then calmed (hundreds/day). Oscillation pattern: site serves same vehicle from the same listing under both `*Series`/`*Class` and a specific model - likely a site-side inconsistency. Eventually calmed without code change. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - "Solgt" (sold) vehicles show no price on listing → skip, don't crawl.
 - `mileage` / `rawOriginalPriceBrutto` SVL fails — known fragile fields.
 - Both finn and biltorvet have leasing ads requiring explicit skip.

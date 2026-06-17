@@ -1,9 +1,10 @@
 # eurostocks (DE)
 
 ## Current status
-🔴 **2026-06-08 OPEN** — All site URLs returning 403/security check since ~2026-06-03. ScrapeDo 25cr with waitSelector intermittently works for B&M but not for listings/details. Ticket MAR-2114 opened. Deactivation locked automatically. Site was disabled (MAR-2084) due to URL pattern change; on develop the service was rewritten (918 lines), `isDisabled: true` removed, `shouldValidateListingVehicle: true` added, `skipDetailsUrlValidation: true` kept. Data IS landing in prod ES (~30k active). Outstanding bugs: see 2026-05-26 entry below.
+🔴 **2026-06-12 DISABLED** — Site disabled due to persistent 403 blocks causing email spam. Ticket MAR-2114 open for proper fix. brie-des-nations threshold adjusted at same time (sofibrie source now 4k+ vehicles). Reactivation requires MAR-2114 resolution.
 
 ## History & quirks (newest first where known)
+- **2026-06-12** — Site disabled by Filip due to persistent 403 blocks causing alert email spam. brie-des-nations threshold also adjusted at same time (sofibrie source now 4k+ vehicles). MAR-2114 ticket open for proper fix; will be addressed in own ticket as discussed in grooming. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - **2026-06-08** — Still blocked. Filip investigating easy solutions. Deactivation locked automatically for this site. Ticket MAR-2114 opened. Planning discussion scheduled. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - **2026-06-03→2026-06-06** — All retries for `eurostocks.com/en/vehicles/cars` return 403 / security check page (in browser too). VPN, ScrapeDo 10cr, 25cr all failing at times; 25cr with `waitSelector` works intermittently for B&M but not listings/details. Condition appears to change during the day (Filip noted 10cr and 1cr became successful for B&M later). PR #41 prepared for workingUrl SVL fail fix (sold vehicles skip preventing workingUrl updates). [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780304827309509)
 - **2026-05-26 — crawler-data-validation findings (post-rewrite, develop `080ac771`):**

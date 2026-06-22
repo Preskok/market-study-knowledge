@@ -23,3 +23,8 @@ When you add a new entry, put it at the TOP of the history section with a date.
 Use format: **YYYY-MM-DD** — what happened + outcome.
 When a site is disabled or an issue is resolved, update the "Current status" line.
 -->
+
+## Test brand+model
+- brand: Seat
+- model: (per-vehicle - no model loop)
+- verified: 2026-06-19

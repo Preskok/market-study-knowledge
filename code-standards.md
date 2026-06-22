@@ -880,3 +880,50 @@ const $ = cheerio.load(html);
 Unit tests are `**/*.spec.ts` co-located with source. Use `TestUtils.mockProviders([...])` from `test/test.utils.ts` — never roll your own mock providers. E2E tests are `test/*.e2e-spec.ts` with a 60s Jest timeout.
 
 **Source:** session 2026-06-17 (moved from CLAUDE.md).
+
+### Log missing field names, not values — use Object.entries + filter
+
+When guarding against missing required fields, compute which fields failed first using `Object.entries` + `filter`, then branch on `.length` with if/else (no early return). Use `errorCode` for the joined field names and `count` for how many failed.
+
+```typescript
+const missingFields = Object.entries({ brand, model, name, ident })
+    .filter(([, value]) => typeof value !== 'string')
+    .map(([field]) => field);
+
+let result = null;
+
+if (missingFields.length) {
+    this.logger.warn({
+        message: `${this.site} vehicle is missing info...`,
+        site: this.site,
+        errorCode: missingFields.join(', '),
+        count: missingFields.length,
+    }, LoggingContexts.PARSER_DEBUGGING);
+} else {
+    // happy path
+    result = buildSomething();
+}
+
+return result;
+```
+
+**Source:** session 2026-06-17.
+
+### Use JSDoc docblocks above methods, not inline comments
+
+Private and public methods get a `/** ... */` docblock, not a `//` comment above them. Inline `//` comments inside method bodies are only for non-obvious WHY, not for describing the method itself.
+
+```typescript
+// BAD
+// tries MM/YYYY first, falls back to year-only
+private parseDateOfFirstRegistration(raw: string): string | null { ... }
+
+// GOOD
+/**
+ * Listings expose year only; details expose MM/YYYY or bare YYYY.
+ * Tries MM/YYYY first, falls back to year-only so SVL comparison stays consistent.
+ */
+private parseDateOfFirstRegistration(raw: string): string | null { ... }
+```
+
+**Source:** session 2026-06-17.

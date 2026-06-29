@@ -1,7 +1,7 @@
 # auto-connect
 
 ## Current status
-🟡 **2026-06-02 WATCH** — Site crawled successfully again after 3-day block. Root cause: Cloudflare 526 (SSL handshake). PRESKOK_SET_2 (Slo mobile proxies) remain 100% blocked. Branch `bugfix/MAR-2039-refactor-autoconnect` (HTML/RSC refactor) ready but not merged — monitor for recurrence.
+✅ **2026-06-12 RESOLVED** — Self-recovered after 502 from ScrapeDo on ~2026-06-10. No code change needed; has been crawling smoothly for 3 days.
 
 ## Test brand+model
 - brand: Volkswagen
@@ -10,6 +10,7 @@
 - notes: ~26 listings, all private sellers (DealerId=null is expected). For dealer-flow testing try BMW/7 Series (`albkor.import` account), but parseDealer is currently broken (see history).
 
 ## History & quirks (newest first where known)
+- **2026-06-10/12** — 502 from ScrapeDo; prepared 0 listing URLs. Filip tested browser requests extensively (hard blocks locally at time of investigation). Self-recovered: past 3 days (by 2026-06-12) crawling smoothly without any code change. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - **2026-06-02** — Site crawled successfully again despite PRESKOK_SET_2 being fully blocked. Matea noted this unexpectedly. Investigation ongoing — possible IP rotation or Cloudflare rule change. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780289229371249)
 - **2026-06-01** — PRESKOK_SET_2 (Slo mobile proxies) confirmed 100% blocked on auto-connect. HTML listing fetch possible but models require API (client-side rendered) — can't avoid ScrapeDo for models without major refactor. ScrapeDo 10cr and 25cr failing at time of investigation. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780289229371249)
 - **2026-06-01** — **Full crawler refactor (branch `bugfix/MAR-2039-refactor-autoconnect`).** Site now uses Next.js App Router with RSC streaming — no `__NEXT_DATA__` script tag. Vehicle data (`posts` array) and brand list (`makes` array) are embedded in static HTML as `self.__next_f.push([1,"..."])` inline script tags — parsed without JS execution. Listings fetch via browser + preskok_set_2 → 200 OK (CF passes). Makes + models fetched via scrape.do **1-credit tier** (not super, `superAtRetry: null`). Confirmed: ~100 brands × 1 credit = ~100 credits/crawl for makes+models. `autoconnect.interoffice.al` is an internal backend domain — DNS does not resolve externally, XHR to it fails even with JS-enabled Puppeteer. **Listing URL format that has `posts` in RSC:** query-param form `?make1=BMW&model1=3-Series&type=car&page=N` — path form `/BMW/3-Series?...` returns only ~4 featured posts. Pagination: increment `page` param, stop when non-promoted count < `maxResultsPerPage` (32). `getNextPageUrl` calls `extractFromRscPayload` twice (once in `getVehicleListPageResponse`, once in `getNextPageUrl`) — minor inefficiency, acceptable.

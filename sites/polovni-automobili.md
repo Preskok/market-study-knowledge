@@ -1,9 +1,10 @@
 # polovni-automobili (RS)
 
 ## Current status
-🟡 **2026-05-22 WATCH** — Unstable graph: 78k→72k→>78k (even 84k some days). Monitoring — may be organic stock increase.
+🔴 **2026-06-16 OPEN** — Website in maintenance/upgrade. Crawler not running since 2026-06-16. Deactivation locked (vehicles stay active from 2 days before lock). Crawler rewrite needed but waiting for site upgrade to complete. Banner still present 2026-06-22. Only Serbian-market source — no alternative available.
 
 ## History & quirks (newest first where known)
+- **2026-06-16→2026-06-22** — Website went into maintenance/technical upgrade on 2026-06-16. Crawler not crawling. Deactivation locked to preserve active stock. Site showing upgrade banner. Gregor: no alternative for Serbian market, must wait. Matea: site partially working but team prefers to wait until upgrade complete before rewriting crawler - upgrade may further change structure. Banner still present 2026-06-22. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1781688993977039)
 - **2026-05-18→2026-05-22** — Numbers dropped from 78k to 72k since 2026-05-18. Recovered to >78k (84k on 2 days) by May 22. Graph unstable — further tracking needed next week. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779107075945509)
 - Supermodel vs model duplicates.
 - Empty brand → cheerio error.

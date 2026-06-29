@@ -1219,3 +1219,27 @@ Good only for simple scalar fields (price, createdAt). Works because ISO date st
 **Verify with a separate `tmp/verify-*.mjs`** — spot-check key fields (price, activeTo, activeFrom, history delta) in S3 and ES after running the fix endpoint.
 
 **Source:** session 2026-06-08 (MAR-1975 — 6 edge cases); extended 2026-06-16 (cases 7-9, history interleaving + scalarDelta helper).
+
+## github-merge-workflow
+
+**Tool** — custom GitHub Actions workflow in `.github/workflows/rebase-and-ff.yml`, calls reusable workflow from `Preskok/github-actions`.
+
+**Commands** — comment on PR to trigger:
+- `/finish-pr` — rebase branch on develop, force-push branch, fast-forward develop (or fast-forward master to develop for releases). No merge commit, linear history.
+- `/sync-pr` — sync long-lived branches without rebasing (master → develop after hotfix).
+- `/rebase-pr` — admin only; force-rebase a stale branch.
+
+**Never use GitHub's native merge buttons** (Merge / Squash / Rebase) — team rule, explicitly banned. They create merge commits or rewrite SHAs on shared branches.
+
+**Feature → develop flow:**
+1. Rebase branch locally on develop and force-push: `git rebase origin/develop && git push --force-with-lease`
+2. Comment `/finish-pr` on the PR — bot fast-forwards develop, closes PR. No merge commit.
+- The action no longer auto-rebases for you; you must rebase locally first before `/finish-pr`.
+
+**Develop → master flow:** Comment `/finish-pr` — pure fast-forward, no rebase, SHAs preserved exactly.
+
+**If action fails with "Changes must be made through a pull request":** The fix is `FF_MERGE_TOKEN` — a fine-grained PAT (contents + PRs write) added as repo secret and bypass actor on the org ruleset. Matea (ams-owner) owns this for market-study.
+
+**Org ruleset (as of 2026-06-24):** "Protect long-lived branches" applies org-wide (require PR, no force-push, no deletion). Per-project approval rules set by project owner (Matea for AMS via `ams-owner` team).
+
+**Source:** session 2026-06-26; Confluence — https://preskok.atlassian.net/wiki/spaces/TT/pages/4242931715

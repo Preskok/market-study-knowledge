@@ -1,9 +1,10 @@
 # autobazar (SK)
 
 ## Current status
-🟡 **2026-06-15 FIX IN REVIEW** — MAR-2101. Fix implemented: `getBrandsAndModels()` now uses advanced search page (`/rozsirene-vyhladavanie/osobne-auta/`) per brand numeric ID instead of per-brand subdomain. 110 brands stable, model count stable. Branch `bugfix/MAR-2101-fix-autobazar-SK-crawler`.
+✅ **2026-06-15 RESOLVED** — Fix deployed (MAR-2101). Matea confirmed fix working in week-15 thread. `getBrandsAndModels()` now uses advanced search page per brand numeric ID — stable listing URL count.
 
 ## History & quirks (newest first where known)
+- **2026-06-15** — Fix deployed and confirmed working by Filip. Matea also confirmed in week-15 thread ✅. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1781508175413899)
 - **2026-06-15** — Fix implemented for MAR-2101. Root cause: per-brand subdomain (`audi.autobazar.sk`) returns random/incomplete model list each SSR response; S3 cache persists this for the whole day. Fix: get brand numeric ID from homepage `#brand option[value]`, fetch `/rozsirene-vyhladavanie/osobne-auta/?p[categories][0][]=1&p[categories][1][][]={id}`, select `option[data-brand-id="{id}"]` — SSR always includes all models. Produces stable ~1200 listing URLs.
 - **2026-06-12** — 35k/50k vehicles. Root cause identified: `getBrandsAndModels()` prepares inconsistent listing URL count each run (1185, 1206, 1225 in 3 runs minutes apart). Some brands (e.g. Audi) entirely absent from a given day's B&M response even though locally they appear. Investigating `autobazar.sk/rozsirene-vyhladavanie/` (advanced search) as more stable source. MAR-2101 ticket open. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1780895292454469)
 - **2026-05-25** — 19% fewer vehicles on Saturday 2026-05-17, stable at 52k for last 2 days. MAR-2101 open for instability investigation. [Slack](https://preskok.slack.com/archives/C0859KQ45B2/p1779682055148269)
